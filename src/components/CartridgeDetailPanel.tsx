@@ -8,15 +8,20 @@ import { useLabelSync } from './LabelSyncIndicator';
 import { queueSettingsSave, onSaveStatus } from '../lib/settingsAutoSave';
 import {
   createDefaultSettings,
-  type BeamConvergence,
-  type ImageSize,
-  type ImageFit,
-  type Sharpness,
-  type Region,
-  type Overclock,
+  valueLabel,
+  DISPLAY_MODE_VALUES,
+  DISPLAY_MODE_LABELS,
+  BEAM_CONVERGENCE_VALUES,
+  EDGE_HARDNESS_VALUES,
+  IMAGE_SIZE_VALUES,
+  IMAGE_FIT_VALUES,
+  SHARPNESS_VALUES,
+  INTERPOLATION_VALUES,
+  GAMMA_TRANSFER_VALUES,
+  REGION_VALUES,
+  OVERCLOCK_VALUES,
+  CARTRIDGE_COLOR_VALUES,
   type DisplayMode,
-  type InterpolationAlg,
-  type GammaTransfer,
   type CRTModeSettings,
   type CleanModeSettings,
   type DisplayCatalog,
@@ -44,24 +49,32 @@ interface LookupResult {
 }
 
 // Option arrays for controls
-const DISPLAY_MODE_OPTIONS: DisplayMode[] = ['bvm', 'pvm', 'crt', 'scanlines', 'clean'];
-const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
-  bvm: 'BVM',
-  pvm: 'PVM',
-  crt: 'CRT',
-  scanlines: 'Scanlines',
-  clean: 'Clean',
-};
-const BEAM_CONVERGENCE_OPTIONS: BeamConvergence[] = ['Off', 'Consumer', 'Professional'];
-const IMAGE_SIZE_OPTIONS: ImageSize[] = ['Fill', 'Integer', 'Integer+'];
-const IMAGE_FIT_OPTIONS: ImageFit[] = ['Original', 'Stretch', 'Cinema Zoom'];
-const SHARPNESS_OPTIONS: Sharpness[] = ['Very Soft', 'Soft', 'Medium', 'Sharp', 'Very Sharp'];
-const INTERPOLATION_OPTIONS: InterpolationAlg[] = ['BC Spline', 'Bilinear', 'Blackman Harris', 'Lanczos2'];
-const GAMMA_OPTIONS: GammaTransfer[] = ['Tube', 'Modern', 'Professional'];
-const REGION_OPTIONS: Region[] = ['Auto', 'NTSC', 'PAL'];
-const OVERCLOCK_OPTIONS: Overclock[] = ['Auto', 'Enhanced', 'Enhanced+', 'Unleashed'];
-const EDGE_HARDNESS_OPTIONS = ['Soft', 'Hard'];
 const BIT_COLOR_OPTIONS = ['Off', 'Auto'];
+
+/** OptionSelector over stored settings values, showing the console's menu labels */
+function ValueSelector<T extends string>({
+  label,
+  values,
+  value,
+  onChange,
+}: {
+  label: string;
+  values: readonly T[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <OptionSelector
+      label={label}
+      options={values.map(valueLabel)}
+      value={valueLabel(value)}
+      onChange={(selected) => {
+        const match = values.find((v) => valueLabel(v) === selected);
+        if (match) onChange(match);
+      }}
+    />
+  );
+}
 
 // API response types matching backend
 interface SettingsInfoItem {
@@ -69,12 +82,17 @@ interface SettingsInfoItem {
   source: 'local' | 'sd';
   path: string;
   lastModified?: string;
+  /** Only set when the file is valid and in the 3Dos 1.5.1+ format */
   settings?: CartridgeSettings;
+  format?: 'current' | 'legacy';
+  error?: string;
 }
 
 interface SettingsInfoResponse {
   local: SettingsInfoItem;
   sd: SettingsInfoItem | null;
+  /** Whether settings can be written to the connected card (its console must be on 3Dos 1.5.1+) */
+  sdSupport?: { supported: boolean; reason?: string } | null;
 }
 
 interface GamePakSaveInfo {
@@ -662,6 +680,9 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
   }, [showExportImportMenu]);
 
   const isConnected = !!sdCardPath;
+  // Settings are only written to cards whose console already uses the 3Dos 1.5.1 format
+  const sdWritable = isConnected && (info?.sdSupport?.supported ?? true);
+  const syncPath = sdWritable ? sdCardPath : undefined;
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -692,10 +713,11 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
       const data = await fetchInfo();
       if (!data) return;
 
-      const hasLocal = data.local?.exists;
-      const hasSD = data.sd?.exists;
+      // Only 3Dos 1.5.1+ format files count; older ones are stale (the 1.5.1 update reset them)
+      const hasLocal = data.local?.format === 'current' && !!data.local.settings;
+      const hasSD = data.sd?.format === 'current' && !!data.sd?.settings;
 
-      // Auto-import from SD if no local settings but SD has them
+      // Auto-import from SD if there are no usable local settings but SD has them
       if (!hasLocal && hasSD && sdCardPath && !autoImported) {
         setAutoImported(true);
         setSyncing(true);
@@ -776,7 +798,8 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
 
     try {
       const defaultSettings = createDefaultSettings();
-      const response = await fetch(`/api/cartridges/${cartId}/settings`, {
+      const titleQuery = gameName ? `?title=${encodeURIComponent(gameName)}` : '';
+      const response = await fetch(`/api/cartridges/${cartId}/settings${titleQuery}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(defaultSettings),
@@ -810,11 +833,11 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
       }
 
       // If connected, also upload to SD
-      if (sdCardPath) {
+      if (syncPath) {
         await fetch(`/api/cartridges/${cartId}/settings/upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sdCardPath }),
+          body: JSON.stringify({ sdCardPath: syncPath }),
         });
       }
 
@@ -851,8 +874,9 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
   const handleResetToDefault = async () => {
     try {
       setError(null);
-      const defaultSettings = createDefaultSettings(gameName);
-      const response = await fetch(`/api/cartridges/${cartId}/settings`, {
+      const defaultSettings = createDefaultSettings();
+      const titleQuery = gameName ? `?title=${encodeURIComponent(gameName)}` : '';
+      const response = await fetch(`/api/cartridges/${cartId}/settings${titleQuery}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(defaultSettings),
@@ -864,11 +888,11 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
       }
 
       // If SD card connected, also sync to SD
-      if (sdCardPath) {
+      if (syncPath) {
         await fetch(`/api/cartridges/${cartId}/settings/upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sdCardPath }),
+          body: JSON.stringify({ sdCardPath: syncPath }),
         });
       }
 
@@ -893,8 +917,9 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
     );
   }
 
-  const hasLocal = info?.local?.exists;
-  const hasSD = info?.sd?.exists;
+  const hasLocal = info?.local?.format === 'current' && !!info.local.settings;
+  const hasSD = info?.sd?.format === 'current' && !!info.sd?.settings;
+  const localLegacy = info?.local?.format === 'legacy';
 
   return (
     <div className="tab-content settings-tab">
@@ -905,9 +930,13 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
           {isConnected ? 'SD Card Connected' : 'SD Card Not Connected'}
         </span>
         <span className="status-note">
-          {isConnected ? 'Changes will sync to both local and SD card' : 'Changes will only save locally'}
+          {sdWritable ? 'Changes will sync to both local and SD card' : 'Changes will only save locally'}
         </span>
       </div>
+
+      {isConnected && !sdWritable && info?.sdSupport?.reason && (
+        <div className="settings-format-notice">{info.sdSupport.reason}</div>
+      )}
 
       {error && <div className="error-message">{error}</div>}
 
@@ -920,6 +949,7 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
             <button
               className="btn-secondary conflict-btn"
               onClick={() => handleResolveConflict('use-local')}
+              disabled={!sdWritable}
             >
               <span className="conflict-btn-title">Use Local Settings</span>
               <span className="conflict-btn-desc">Update SD card to match your local settings</span>
@@ -939,7 +969,9 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
       {!hasLocal && !hasSD && conflictState === 'resolved' && (
         <div className="no-settings">
           <p className="empty-message">
-            No settings found for this cartridge.
+            {localLegacy
+              ? 'The saved settings for this cartridge are from before 3Dos 1.5.1, which reset per-game settings and uses a new format. Create new settings or import a current settings.json.'
+              : 'No settings found for this cartridge.'}
           </p>
           <div className="create-settings-options">
             <button className="btn-primary" onClick={handleCreateDefaults}>
@@ -961,7 +993,7 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
           <SettingsEditor
             cartId={cartId}
             settings={info.local.settings}
-            sdCardPath={sdCardPath}
+            sdCardPath={syncPath}
             onSettingsChange={(newSettings) => {
               // Update local info so copy settings uses current values
               setInfo(prev => prev ? {
@@ -1087,6 +1119,14 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
     return unsubscribe;
   }, [cartId, settings]);
 
+  // The parent passes a new callback on every render and re-renders when it's called;
+  // keep it out of the effect's dependencies or each notification re-queues the save
+  // (resetting its debounce, so it never runs) in an endless render loop
+  const onSettingsChangeRef = useRef(onSettingsChange);
+  useEffect(() => {
+    onSettingsChangeRef.current = onSettingsChange;
+  }, [onSettingsChange]);
+
   // Auto-save when settings actually change from initial/saved state
   useEffect(() => {
     const currentJson = JSON.stringify(settings);
@@ -1094,9 +1134,9 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
     if (currentJson !== initialSettingsJson.current) {
       queueSettingsSave(cartId, settings, sdCardPath);
       // Notify parent of settings change so copy uses current settings
-      onSettingsChange?.(settings);
+      onSettingsChangeRef.current?.(settings);
     }
-  }, [cartId, settings, sdCardPath, onSettingsChange]);
+  }, [cartId, settings, sdCardPath]);
 
   // Helper to update display settings
   const updateDisplayMode = (mode: DisplayMode) => {
@@ -1194,12 +1234,12 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
       {/* Display Settings */}
       {activeTab === 'display' && (
         <div className="settings-editor-content">
-          <OptionSelector
+          <ValueSelector
             label="Display Mode"
-            options={DISPLAY_MODE_OPTIONS.map(m => DISPLAY_MODE_LABELS[m])}
+            values={DISPLAY_MODE_VALUES.map((m) => DISPLAY_MODE_LABELS[m])}
             value={DISPLAY_MODE_LABELS[currentDisplayMode]}
-            onChange={(val) => {
-              const mode = DISPLAY_MODE_OPTIONS.find(m => DISPLAY_MODE_LABELS[m] === val);
+            onChange={(label) => {
+              const mode = DISPLAY_MODE_VALUES.find((m) => DISPLAY_MODE_LABELS[m] === label);
               if (mode) updateDisplayMode(mode);
             }}
           />
@@ -1207,46 +1247,46 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
           {/* CRT-based mode settings (BVM, PVM, CRT, Scanlines) */}
           {!isCleanMode && crtSettings && (
             <>
-              <OptionSelector
+              <ValueSelector
                 label="Horiz. Beam Convergence"
-                options={BEAM_CONVERGENCE_OPTIONS}
-                value={crtSettings.horizontalBeamConvergence}
-                onChange={(val) => updateCRTSetting(currentDisplayMode, 'horizontalBeamConvergence', val as BeamConvergence)}
+                values={BEAM_CONVERGENCE_VALUES}
+                value={crtSettings.horizontal_beam_convergence}
+                onChange={(val) => updateCRTSetting(currentDisplayMode, 'horizontal_beam_convergence', val)}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Vert. Beam Convergence"
-                options={BEAM_CONVERGENCE_OPTIONS}
-                value={crtSettings.verticalBeamConvergence}
-                onChange={(val) => updateCRTSetting(currentDisplayMode, 'verticalBeamConvergence', val as BeamConvergence)}
+                values={BEAM_CONVERGENCE_VALUES}
+                value={crtSettings.vertical_beam_convergence}
+                onChange={(val) => updateCRTSetting(currentDisplayMode, 'vertical_beam_convergence', val)}
               />
 
               <ToggleSwitch
                 label="Edge Overshoot"
-                checked={isEdgeOvershootLocked ? edgeOvershootLockedValue : crtSettings.enableEdgeOvershoot}
-                onChange={(val) => updateCRTSetting(currentDisplayMode, 'enableEdgeOvershoot', val)}
+                checked={isEdgeOvershootLocked ? edgeOvershootLockedValue : crtSettings.enable_edge_overshoot}
+                onChange={(val) => updateCRTSetting(currentDisplayMode, 'enable_edge_overshoot', val)}
                 disabled={isEdgeOvershootLocked}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Edge Hardness"
-                options={EDGE_HARDNESS_OPTIONS}
-                value={crtSettings.enableEdgeHardness ? 'Hard' : 'Soft'}
-                onChange={(val) => updateCRTSetting(currentDisplayMode, 'enableEdgeHardness', val === 'Hard')}
+                values={EDGE_HARDNESS_VALUES}
+                value={crtSettings.enable_edge_hardness}
+                onChange={(val) => updateCRTSetting(currentDisplayMode, 'enable_edge_hardness', val)}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Image Size"
-                options={IMAGE_SIZE_OPTIONS}
-                value={crtSettings.imageSize}
-                onChange={(val) => updateCRTSetting(currentDisplayMode, 'imageSize', val as ImageSize)}
+                values={IMAGE_SIZE_VALUES}
+                value={crtSettings.image_size}
+                onChange={(val) => updateCRTSetting(currentDisplayMode, 'image_size', val)}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Image Fit"
-                options={IMAGE_FIT_OPTIONS}
-                value={crtSettings.imageFit}
-                onChange={(val) => updateCRTSetting(currentDisplayMode, 'imageFit', val as ImageFit)}
+                values={IMAGE_FIT_VALUES}
+                value={crtSettings.image_fit}
+                onChange={(val) => updateCRTSetting(currentDisplayMode, 'image_fit', val)}
               />
             </>
           )}
@@ -1254,42 +1294,50 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
           {/* Clean mode settings */}
           {isCleanMode && settings.display.catalog.clean && (
             <>
-              <OptionSelector
+              <ValueSelector
                 label="Interp. Algorithm"
-                options={INTERPOLATION_OPTIONS}
-                value={settings.display.catalog.clean.interpolationAlg}
-                onChange={(val) => updateCleanSetting('interpolationAlg', val as InterpolationAlg)}
+                values={INTERPOLATION_VALUES}
+                value={settings.display.catalog.clean.interpolation_alg}
+                onChange={(val) => updateCleanSetting('interpolation_alg', val)}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Gamma Transfer"
-                options={GAMMA_OPTIONS}
-                value={settings.display.catalog.clean.gammaTransferFunction}
-                onChange={(val) => updateCleanSetting('gammaTransferFunction', val as GammaTransfer)}
+                values={GAMMA_TRANSFER_VALUES}
+                value={settings.display.catalog.clean.gamma_transfer_function}
+                onChange={(val) => updateCleanSetting('gamma_transfer_function', val)}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Sharpness"
-                options={SHARPNESS_OPTIONS}
+                values={SHARPNESS_VALUES}
                 value={settings.display.catalog.clean.sharpness}
-                onChange={(val) => updateCleanSetting('sharpness', val as Sharpness)}
+                onChange={(val) => updateCleanSetting('sharpness', val)}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Image Size"
-                options={IMAGE_SIZE_OPTIONS}
-                value={settings.display.catalog.clean.imageSize}
-                onChange={(val) => updateCleanSetting('imageSize', val as ImageSize)}
+                values={IMAGE_SIZE_VALUES}
+                value={settings.display.catalog.clean.image_size}
+                onChange={(val) => updateCleanSetting('image_size', val)}
               />
 
-              <OptionSelector
+              <ValueSelector
                 label="Image Fit"
-                options={IMAGE_FIT_OPTIONS}
-                value={settings.display.catalog.clean.imageFit}
-                onChange={(val) => updateCleanSetting('imageFit', val as ImageFit)}
+                values={IMAGE_FIT_VALUES}
+                value={settings.display.catalog.clean.image_fit}
+                onChange={(val) => updateCleanSetting('image_fit', val)}
               />
             </>
           )}
+
+          {/* Library view (3Dos 1.5.1+) */}
+          <ValueSelector
+            label="Cartridge Color"
+            values={CARTRIDGE_COLOR_VALUES}
+            value={settings.library.cartridge_color}
+            onChange={(val) => setSettings((prev) => ({ ...prev, library: { ...prev.library, cartridge_color: val } }))}
+          />
         </div>
       )}
 
@@ -1298,75 +1346,81 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
         <div className="settings-editor-content">
           <ToggleSwitch
             label="Virtual Expansion Pak"
-            checked={settings.hardware.virtualExpansionPak}
-            onChange={(val) => updateHardwareSetting('virtualExpansionPak', val)}
+            checked={settings.hardware.virtual_expansion_pak}
+            onChange={(val) => updateHardwareSetting('virtual_expansion_pak', val)}
           />
 
-          <OptionSelector
+          <ValueSelector
             label="Region"
-            options={REGION_OPTIONS}
+            values={REGION_VALUES}
             value={settings.hardware.region}
-            onChange={(val) => updateHardwareSetting('region', val as Region)}
+            onChange={(val) => updateHardwareSetting('region', val)}
           />
 
-          {/* De-Blur: Note the inverted logic - disableDeblur=false means ON */}
+          {/* De-Blur: Note the inverted logic - disable_deblur=false means ON */}
           <ToggleSwitch
             label="De-Blur"
-            checked={!settings.hardware.disableDeblur}
-            onChange={(val) => updateHardwareSetting('disableDeblur', !val)}
+            checked={!settings.hardware.disable_deblur}
+            onChange={(val) => updateHardwareSetting('disable_deblur', !val)}
           />
 
           <OptionSelector
             label="32bit Color"
             options={BIT_COLOR_OPTIONS}
-            value={settings.hardware.enable32BitColor ? 'Auto' : 'Off'}
-            onChange={(val) => updateHardwareSetting('enable32BitColor', val === 'Auto')}
+            value={settings.hardware.enable_32_bit_color ? 'Auto' : 'Off'}
+            onChange={(val) => updateHardwareSetting('enable_32_bit_color', val === 'Auto')}
           />
 
           <ToggleSwitch
             label="Force Progressive Output"
-            checked={settings.hardware.forceProgressiveOutput ?? false}
-            onChange={(val) => updateHardwareSetting('forceProgressiveOutput', val)}
+            checked={settings.hardware.force_progressive_output}
+            onChange={(val) => updateHardwareSetting('force_progressive_output', val)}
+          />
+
+          <ToggleSwitch
+            label="Horizontal Upscaling"
+            checked={settings.hardware.horizontal_upscaling}
+            onChange={(val) => updateHardwareSetting('horizontal_upscaling', val)}
           />
 
           <ToggleSwitch
             label="Disable Texture Filtering"
-            checked={settings.hardware.disableTextureFiltering}
-            onChange={(val) => updateHardwareSetting('disableTextureFiltering', val)}
+            checked={settings.hardware.disable_texture_filtering}
+            onChange={(val) => updateHardwareSetting('disable_texture_filtering', val)}
           />
 
           <ToggleSwitch
             label="Disable Antialiasing"
-            checked={settings.hardware.disableAntialiasing}
-            onChange={(val) => updateHardwareSetting('disableAntialiasing', val)}
+            checked={settings.hardware.disable_antialiasing}
+            onChange={(val) => updateHardwareSetting('disable_antialiasing', val)}
           />
 
           <ToggleSwitch
             label="Force Original Hardware"
-            checked={settings.hardware.forceOriginalHardware}
-            onChange={(val) => updateHardwareSetting('forceOriginalHardware', val)}
+            checked={settings.hardware.force_original_hardware}
+            onChange={(val) => updateHardwareSetting('force_original_hardware', val)}
           />
 
           {/* Overclock - disabled when Force Original Hardware is on */}
-          {settings.hardware.forceOriginalHardware ? (
+          {settings.hardware.force_original_hardware ? (
             <div className="control-row disabled">
               <span className="control-label">Overclock</span>
               <div className="option-selector disabled">
                 <button className="arrow-btn disabled" disabled>
                   <img src="/pixel-arrow-left.png" alt="" className="arrow-icon" />
                 </button>
-                <span className="option-value">{settings.hardware.overclock}</span>
+                <span className="option-value">{valueLabel(settings.hardware.overclock)}</span>
                 <button className="arrow-btn disabled" disabled>
                   <img src="/pixel-arrow-right.png" alt="" className="arrow-icon" />
                 </button>
               </div>
             </div>
           ) : (
-            <OptionSelector
+            <ValueSelector
               label="Overclock"
-              options={OVERCLOCK_OPTIONS}
+              values={OVERCLOCK_VALUES}
               value={settings.hardware.overclock}
-              onChange={(val) => updateHardwareSetting('overclock', val as Overclock)}
+              onChange={(val) => updateHardwareSetting('overclock', val)}
             />
           )}
         </div>

@@ -8,7 +8,9 @@
  */
 
 import { readFile, writeFile, mkdir, rm } from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, mkdtempSync, rmSync } from 'fs';
+import os from 'os';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -21,11 +23,13 @@ import { type OwnedCartsData } from '../../server/lib/owned-carts.js';
 import {
   parseSettings,
   validateSettings,
-  validateHardwareSettings,
+  normalizeSettings,
+  serializeSettings,
+  isLegacySettings,
+  getSDSettingsSupport,
   createDefaultSettings,
-  createDefaultDisplaySettings,
-  DEFAULT_HARDWARE_SETTINGS,
-  type CartridgeSettings,
+  LegacySettingsError,
+  SETTINGS_SCHEMA_URL,
 } from '../../server/lib/cartridge-settings.js';
 
 import {
@@ -55,9 +59,59 @@ export async function cleanOutput(): Promise<void> {
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'game-data', 'fixtures');
 
-async function getFixtureSettings(): Promise<CartridgeSettings> {
-  const content = await readFile(path.join(FIXTURES_DIR, 'settings.json'), 'utf-8');
-  return JSON.parse(content);
+/** Written by 3Dos 1.5.1 (Turok 3, converted during the 1.5.0 -> 1.5.1 update) */
+async function getFixtureSettingsText(): Promise<string> {
+  return readFile(path.join(FIXTURES_DIR, 'settings.json'), 'utf-8');
+}
+
+/** Written by 3Dos 1.5.0 (an orphaned folder the 1.5.1 update didn't convert; note the trailing commas) */
+async function getLegacySettingsText(): Promise<string> {
+  return readFile(path.join(FIXTURES_DIR, 'settings-legacy.json'), 'utf-8');
+}
+
+/**
+ * Analogue's published schema, with the one known gap patched: it doesn't
+ * allow enable_edge_overshoot in pvm/crt/scanlines, but 3Dos 1.5.1 writes it
+ * there in every file.
+ */
+async function compileSettingsSchema(patchConsoleFields: boolean) {
+  const schemaPath = path.join(__dirname, '..', '..', 'docs', 'analogue-schemas', '3d-settings.json');
+  const schema = JSON.parse(await readFile(schemaPath, 'utf-8'));
+  if (patchConsoleFields) {
+    for (const mode of ['pvm', 'crt', 'scanlines']) {
+      schema.properties.display.properties.catalog.properties[mode].properties.enable_edge_overshoot = { type: 'boolean' };
+    }
+  }
+  return new Ajv2020({ allErrors: true, strict: false, validateFormats: false }).compile(schema);
+}
+
+function expectThrows(fn: () => unknown, check: (error: unknown) => boolean, label: string): void {
+  let threw = false;
+  try {
+    fn();
+  } catch (error) {
+    threw = true;
+    assert(check(error), `${label}: unexpected error ${error instanceof Error ? error.message : String(error)}`);
+  }
+  assert(threw, `${label}: expected an error`);
+}
+
+/** Temporary fake SD card; files maps relative paths to contents */
+function withCard(files: Record<string, string>, fn: (card: string) => Promise<void>): () => Promise<void> {
+  return async () => {
+    const card = mkdtempSync(path.join(os.tmpdir(), 'a3d-settings-card-'));
+    try {
+      await mkdir(path.join(card, 'Library', 'N64', 'Games'), { recursive: true });
+      await writeFile(path.join(card, 'Library', 'N64', 'library.db'), '');
+      for (const [file, content] of Object.entries(files)) {
+        await mkdir(path.dirname(path.join(card, file)), { recursive: true });
+        await writeFile(path.join(card, file), content);
+      }
+      await fn(card);
+    } finally {
+      rmSync(card, { recursive: true, force: true });
+    }
+  };
 }
 
 async function getFixtureGamePak(): Promise<Buffer> {
@@ -146,106 +200,129 @@ const ownedCartsTests = [
 // =============================================================================
 
 const settingsTests = [
-  test('parseSettings parses valid settings.json', async () => {
-    const settings = await getFixtureSettings();
+  test('parseSettings reads a settings.json written by 3Dos 1.5.1', async () => {
+    const settings = parseSettings(await getFixtureSettingsText());
 
-    assert(settings.title !== undefined, 'Should have title');
-    assert(settings.display !== undefined, 'Should have display');
-    assert(settings.hardware !== undefined, 'Should have hardware');
+    assertEqual(settings.$schema, SETTINGS_SCHEMA_URL);
+    assertEqual(settings.display.odm, 'bvm');
+    assertEqual(settings.display.catalog.bvm.horizontal_beam_convergence, 'professional');
+    assertEqual(settings.display.catalog.bvm.enable_edge_hardness, 'soft');
+    assertEqual(settings.display.catalog.clean.interpolation_alg, 'bc-spline');
+    assertEqual(settings.library.cartridge_color, 'gray');
+    assertEqual(settings.hardware.overclock, 'auto');
+    assertEqual(settings.hardware.horizontal_upscaling, true);
+    assertEqual(settings.hardware.force_progressive_output, true);
   }),
 
-  test('parseSettings extracts hardware settings correctly', async () => {
-    const settings = await getFixtureSettings();
-
-    assertEqual(settings.hardware.virtualExpansionPak, true, 'virtualExpansionPak should be true');
-    assertEqual(settings.hardware.region, 'Auto', 'region should be Auto');
-    assertEqual(settings.hardware.overclock, 'Unleashed', 'overclock should be Unleashed');
-    assertEqual(settings.hardware.enable32BitColor, true, 'enable32BitColor should be true');
+  test('serializeSettings reproduces the console\'s file exactly (keys, order, values)', async () => {
+    const original = await getFixtureSettingsText();
+    const roundTrip = serializeSettings(parseSettings(original));
+    assertEqual(JSON.stringify(JSON.parse(roundTrip)), JSON.stringify(JSON.parse(original)));
   }),
 
-  test('parseSettings extracts display mode correctly', async () => {
-    const settings = await getFixtureSettings();
-
-    assertEqual(settings.display.odm, 'bvm', 'Active display mode should be bvm');
-    assert(settings.display.catalog.bvm !== undefined, 'Should have BVM catalog entry');
-    assert(settings.display.catalog.clean !== undefined, 'Should have clean catalog entry');
+  test('pre-1.5.1 files are detected as legacy, never parsed or converted', async () => {
+    const legacyText = await getLegacySettingsText();
+    assert(isLegacySettings(JSON.parse(legacyText.replace(/,(\s*[}\]])/g, '$1'))), 'legacy file detected');
+    expectThrows(() => parseSettings(legacyText), (e) => e instanceof LegacySettingsError, 'parseSettings');
+    assert(!validateSettings({ title: 'Test', hardware: { virtualExpansionPak: true } }).valid, 'legacy object rejected');
+    assert(!isLegacySettings(JSON.parse(await getFixtureSettingsText())), 'current file not legacy');
   }),
 
-  test('validateSettings accepts valid settings', async () => {
-    const settings = await getFixtureSettings();
-    const result = validateSettings(settings);
-
-    assert(result.valid, `Settings should be valid: ${result.errors.join(', ')}`);
-    assertEqual(result.errors.length, 0, 'Should have no errors');
+  test('normalizeSettings rejects values the console does not use', async () => {
+    const settings = JSON.parse(await getFixtureSettingsText());
+    settings.hardware.overclock = 'SuperFast';
+    settings.display.catalog.clean.sharpness = 'Medium';
+    const { settings: normalized, errors } = normalizeSettings(settings);
+    assertEqual(normalized, undefined);
+    assert(errors.some((e) => e.includes('hardware.overclock')), 'overclock error');
+    assert(errors.some((e) => e.includes('catalog.clean.sharpness')), 'title-case value rejected');
   }),
 
-  test('validateSettings rejects invalid region', () => {
-    const errors = validateHardwareSettings({ region: 'Invalid' as never });
-    assert(errors.length > 0, 'Should have validation errors');
-    assert(errors[0].includes('region'), 'Error should mention region');
-  }),
-
-  test('validateSettings rejects invalid overclock', () => {
-    const errors = validateHardwareSettings({ overclock: 'SuperFast' as never });
-    assert(errors.length > 0, 'Should have validation errors');
-    assert(errors[0].includes('overclock'), 'Error should mention overclock');
-  }),
-
-  test('validateSettings accepts valid hardware values', () => {
-    const errors = validateHardwareSettings({
-      region: 'NTSC',
-      overclock: 'Enhanced',
-    });
-    assertEqual(errors.length, 0, 'Should have no errors for valid values');
-  }),
-
-  test('createDefaultSettings creates valid structure', () => {
-    const settings = createDefaultSettings('Test Game');
-
-    assertEqual(settings.title, 'Test Game', 'Title should match');
-    assert(settings.display !== undefined, 'Should have display');
-    assert(settings.hardware !== undefined, 'Should have hardware');
-
-    const validation = validateSettings(settings);
-    assert(validation.valid, 'Default settings should be valid');
-  }),
-
-  test('createDefaultDisplaySettings has all catalog modes', () => {
-    const display = createDefaultDisplaySettings();
-
-    assertEqual(display.odm, 'crt', 'Default mode should be crt');
-    assert(display.catalog.bvm !== undefined, 'Should have bvm');
-    assert(display.catalog.pvm !== undefined, 'Should have pvm');
-    assert(display.catalog.crt !== undefined, 'Should have crt');
-    assert(display.catalog.scanlines !== undefined, 'Should have scanlines');
-    assert(display.catalog.clean !== undefined, 'Should have clean');
-  }),
-
-  test('DEFAULT_HARDWARE_SETTINGS has expected values', () => {
-    assertEqual(DEFAULT_HARDWARE_SETTINGS.region, 'Auto', 'Default region should be Auto');
-    assertEqual(DEFAULT_HARDWARE_SETTINGS.overclock, 'Auto', 'Default overclock should be Auto');
-    assertEqual(DEFAULT_HARDWARE_SETTINGS.virtualExpansionPak, true, 'Default VEP should be true');
-  }),
-
-  test('parseSettings handles missing fields gracefully', () => {
-    const minimal = { title: 'Test' };
-    const parsed = parseSettings(JSON.stringify(minimal));
-
-    assertEqual(parsed.title, 'Test', 'Title should be preserved');
-    assert(parsed.display !== undefined, 'Should add default display');
-    assert(parsed.hardware !== undefined, 'Should add default hardware');
+  test('normalizeSettings drops unknown keys and fills the console-only overshoot fields', async () => {
+    const settings = JSON.parse(await getFixtureSettingsText());
+    settings.extra = true;
+    settings.hardware.unknown_option = 1;
+    delete settings.display.catalog.pvm.enable_edge_overshoot;
+    const { settings: normalized, errors } = normalizeSettings(settings);
+    assertEqual(errors.length, 0, errors.join('; '));
+    assert(normalized !== undefined && !('extra' in normalized) && !('unknown_option' in normalized.hardware), 'unknown keys dropped');
+    assertEqual(normalized?.display.catalog.pvm.enable_edge_overshoot, true, 'pvm overshoot uses the locked value');
   }),
 
   test('parseSettings rejects non-object JSON input', () => {
-    // JSON.parse of a quoted string returns a string, which should fail validation
-    let threw = false;
-    try {
-      parseSettings('"just a string"');
-    } catch (e) {
-      threw = true;
-      assert(e instanceof Error && e.message === 'Settings must be an object', 'Should throw correct error');
+    expectThrows(() => parseSettings('"just a string"'), (e) => e instanceof Error && e.message.includes('must be an object'), 'string');
+  }),
+
+  test('createDefaultSettings produces a valid 1.5.1 file', () => {
+    const validation = validateSettings(createDefaultSettings());
+    assert(validation.valid, validation.errors.join('; '));
+  }),
+
+  test("written files pass Analogue's schema (with the known enable_edge_overshoot gap)", async () => {
+    const validate = await compileSettingsSchema(true);
+    for (const [label, settings] of [
+      ['defaults', createDefaultSettings()],
+      ['console file round trip', parseSettings(await getFixtureSettingsText())],
+    ] as const) {
+      const data = JSON.parse(serializeSettings(settings));
+      assert(validate(data), `${label}: ${JSON.stringify(validate.errors)}`);
     }
-    assert(threw, 'Should throw for non-object input');
+  }),
+
+  test("the console's own files fail the unpatched schema only on enable_edge_overshoot", async () => {
+    const validate = await compileSettingsSchema(false);
+    assert(!validate(JSON.parse(await getFixtureSettingsText())), 'expected the published schema to reject it');
+    const unexpected = (validate.errors ?? []).filter(
+      (e) => !(e.keyword === 'additionalProperties' && (e.params as { additionalProperty?: string }).additionalProperty === 'enable_edge_overshoot'),
+    );
+    assertEqual(unexpected.length, 0, JSON.stringify(unexpected));
+  }),
+
+  // ===========================================================================
+  // SD card compatibility (settings are only written for 3Dos 1.5.1+ consoles)
+  // ===========================================================================
+
+  test('getSDSettingsSupport: card with 1.5.1-format settings accepts writes', async () => {
+    const current = await getFixtureSettingsText();
+    const legacy = await getLegacySettingsText();
+    await withCard(
+      {
+        'Library/N64/Games/Turok 3 96be960f/settings.json': current,
+        // Orphaned folders on a 1.5.1 card keep the old format; they don't block writes
+        'Library/N64/Games/Unknown Cartridge c496f93f/settings.json': legacy,
+      },
+      async (card) => {
+        assertEqual((await getSDSettingsSupport(card)).supported, true);
+      },
+    )();
+  }),
+
+  test('getSDSettingsSupport: card with only pre-1.5.1 settings refuses writes', async () => {
+    const legacy = await getLegacySettingsText();
+    await withCard(
+      {
+        'Library/N64/Games/Unknown Cartridge c496f93f/settings.json': legacy,
+        // A copied but not yet installed 1.5.1 update doesn't count: the console hasn't converted anything
+        'a3d_os_01_05_01.bin': 'x',
+      },
+      async (card) => {
+        const support = await getSDSettingsSupport(card);
+        assertEqual(support.supported, false);
+        assert(support.reason?.includes('1.5.1') ?? false, 'reason mentions the required firmware');
+      },
+    )();
+  }),
+
+  test('getSDSettingsSupport: no settings files, decided by firmware version', async () => {
+    await withCard({}, async (card) => {
+      assertEqual((await getSDSettingsSupport(card)).supported, true, 'unknown firmware, nothing to overwrite');
+    })();
+    await withCard({ 'a3d_os_01_05_00.bin': 'x' }, async (card) => {
+      assertEqual((await getSDSettingsSupport(card)).supported, false, '1.5.0 console');
+    })();
+    await withCard({ 'System/Archived/a3d_os_01_05_01.bin': 'x' }, async (card) => {
+      assertEqual((await getSDSettingsSupport(card)).supported, true, '1.5.1 installed');
+    })();
   }),
 ];
 

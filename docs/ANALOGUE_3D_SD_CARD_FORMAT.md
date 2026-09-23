@@ -82,141 +82,95 @@ The N64 Controller Pak was a memory card that plugged into the controller for sa
 
 ### settings.json (Per-Game Configuration)
 
-JSON configuration file for each game. Contains display and hardware settings.
+JSON configuration file for each game with its display, library and hardware settings.
 
-**Note**: The Analogue 3D writes JSON with trailing commas, which is technically invalid JSON. A3D Manager sanitizes these when reading.
+**Format change in 3D OS 1.5.1:** the update rewrote every `settings.json` for the
+cartridges in `library.db` in a new format (and reset hardware settings to new
+defaults). Analogue documents it at
+[developer/docs/platform/settings-json](https://www.analogue.co/developer/docs/platform/settings-json)
+with a JSON schema at `https://schemas.analogue.co/platform/3d/settings.json`
+(copy in [analogue-schemas/3d-settings.json](./analogue-schemas/3d-settings.json)).
+The docs say a file that fails validation is overwritten with defaults at the next boot.
 
-#### TypeScript Interface
+#### Format (3D OS 1.5.1+)
 
-```typescript
-interface CartridgeSettings {
-  title: string;
-  display: {
-    odm: 'bvm' | 'pvm' | 'crt' | 'scanlines' | 'clean';
-    catalog: {
-      bvm: CRTModeSettings;
-      pvm: CRTModeSettings;
-      crt: CRTModeSettings;
-      scanlines: CRTModeSettings;
-      clean: CleanModeSettings;
-    };
-  };
-  hardware: {
-    virtualExpansionPak: boolean;
-    region: 'Auto' | 'NTSC' | 'PAL';
-    disableDeblur: boolean;
-    enable32BitColor: boolean;
-    forceProgressiveOutput: boolean;  // NEW in 3D OS 1.2.0
-    disableTextureFiltering: boolean;
-    disableAntialiasing: boolean;
-    forceOriginalHardware: boolean;
-    overclock: 'Auto' | 'Enhanced' | 'Enhanced+' | 'Unleashed';
-  };
-}
-
-interface CRTModeSettings {
-  horizontalBeamConvergence: 'Off' | 'Consumer' | 'Professional';
-  verticalBeamConvergence: 'Off' | 'Consumer' | 'Professional';
-  enableEdgeOvershoot: boolean;
-  enableEdgeHardness: boolean;
-  imageSize: 'Fill' | 'Integer' | 'Integer+';
-  imageFit: 'Original' | 'Stretch' | 'Cinema Zoom';
-}
-
-interface CleanModeSettings {
-  interpolationAlg: 'BC Spline' | 'Bilinear' | 'Blackman Harris' | 'Lanczos2';
-  gammaTransferFunction: 'Tube' | 'Modern' | 'Professional';
-  sharpness: 'Very Soft' | 'Soft' | 'Medium' | 'Sharp' | 'Very Sharp';
-  imageSize: 'Fill' | 'Integer' | 'Integer+';
-  imageFit: 'Original' | 'Stretch' | 'Cinema Zoom';
-}
-```
-
-#### Example
+Example written by the console (Turok 3 after the 1.5.1 update; `pvm`, `crt` and
+`scanlines` have the same fields as `bvm`):
 
 ```json
 {
-  "title": "GoldenEye 007",
+  "$schema": "https://schemas.analogue.co/platform/3d/settings.json",
   "display": {
-    "odm": "crt",
+    "odm": "bvm",
     "catalog": {
       "bvm": {
-        "horizontalBeamConvergence": "Professional",
-        "verticalBeamConvergence": "Professional",
-        "enableEdgeOvershoot": false,
-        "enableEdgeHardness": false,
-        "imageSize": "Fill",
-        "imageFit": "Original"
+        "horizontal_beam_convergence": "professional",
+        "vertical_beam_convergence": "professional",
+        "enable_edge_overshoot": false,
+        "enable_edge_hardness": "soft",
+        "image_fit": "original",
+        "image_size": "fill"
       },
       "pvm": { ... },
       "crt": { ... },
       "scanlines": { ... },
       "clean": {
-        "interpolationAlg": "BC Spline",
-        "gammaTransferFunction": "Tube",
-        "sharpness": "Medium",
-        "imageSize": "Fill",
-        "imageFit": "Original"
+        "interpolation_alg": "bc-spline",
+        "gamma_transfer_function": "tube",
+        "sharpness": "medium",
+        "image_fit": "original",
+        "image_size": "fill"
       }
     }
   },
+  "library": {
+    "cartridge_color": "gray"
+  },
   "hardware": {
-    "virtualExpansionPak": true,
-    "region": "Auto",
-    "disableDeblur": false,
-    "enable32BitColor": true,
-    "disableTextureFiltering": false,
-    "disableAntialiasing": false,
-    "forceOriginalHardware": false,
-    "overclock": "Unleashed"
+    "disable_antialiasing": false,
+    "disable_deblur": false,
+    "disable_texture_filtering": false,
+    "enable_32_bit_color": true,
+    "force_original_hardware": false,
+    "force_progressive_output": true,
+    "overclock": "auto",
+    "region": "auto",
+    "virtual_expansion_pak": true,
+    "horizontal_upscaling": true
   }
 }
 ```
 
-#### Hardware Settings
+| Setting | Values |
+|---------|--------|
+| `display.odm` | `bvm`, `pvm`, `crt`, `scanlines`, `clean` |
+| `horizontal_beam_convergence`, `vertical_beam_convergence` | `consumer`, `professional`, `off` |
+| `enable_edge_overshoot` | boolean (only adjustable in `bvm`; see below) |
+| `enable_edge_hardness` | `soft`, `hard` (a boolean before 1.5.1) |
+| `image_fit` | `original`, `stretch`, `cinema-zoom` |
+| `image_size` | `fill`, `integer`, `integer-plus` |
+| `interpolation_alg` | `bc-spline`, `bilinear`, `blackman-harris`, `lanczos2` |
+| `gamma_transfer_function` | `tube`, `modern` |
+| `sharpness` | `very-soft`, `soft`, `medium`, `sharp`, `very-sharp` |
+| `library.cartridge_color` | `gray`, `red`, `green`, `blue`, `yellow`, `gold`, `black`, `purple`, `rose` |
+| `hardware.overclock` | `off`, `auto`, `enhanced`, `enhanced-plus`, `unleashed` |
+| `hardware.region` | `auto`, `ntsc`, `pal` |
+| other `hardware.*` | boolean |
 
-| Setting | Type | Values | Description |
-|---------|------|--------|-------------|
-| `virtualExpansionPak` | boolean | | Enable virtual Expansion Pak |
-| `region` | string | `Auto`, `NTSC`, `PAL` | Force region mode |
-| `disableDeblur` | boolean | | Disable VI deblur filter |
-| `enable32BitColor` | boolean | | Enable 32-bit color mode |
-| `forceProgressiveOutput` | boolean | | Force progressive video output mode |
-| `disableTextureFiltering` | boolean | | Disable texture filtering |
-| `disableAntialiasing` | boolean | | Disable antialiasing |
-| `forceOriginalHardware` | boolean | | Force original N64 hardware behavior |
-| `overclock` | string | `Auto`, `Enhanced`, `Enhanced+`, `Unleashed` | CPU overclock level |
+**Schema vs. console:** the published schema has `additionalProperties: false` and
+only lists `enable_edge_overshoot` for `bvm`, but 3D OS 1.5.1 writes it in `pvm`,
+`crt` and `scanlines` too (locked to `true`, `true` and `false`). Every file the
+console wrote in testing failed the published schema for that reason only.
+A3D Manager writes files in the console's shape.
 
-#### Display Modes
+#### Before 3D OS 1.5.1
 
-| Mode | Description |
-|------|-------------|
-| `bvm` | Sony BVM professional broadcast monitor emulation |
-| `pvm` | Sony PVM professional video monitor emulation |
-| `crt` | Consumer CRT television emulation |
-| `scanlines` | Scanline filter overlay |
-| `clean` | Clean/sharp digital output |
-
-#### CRT Mode Settings (bvm, pvm, crt, scanlines)
-
-| Setting | Values | Description |
-|---------|--------|-------------|
-| `horizontalBeamConvergence` | `Off`, `Consumer`, `Professional` | Horizontal beam alignment |
-| `verticalBeamConvergence` | `Off`, `Consumer`, `Professional` | Vertical beam alignment |
-| `enableEdgeOvershoot` | boolean | Edge overshoot effect |
-| `enableEdgeHardness` | boolean | Edge hardness effect |
-| `imageSize` | `Fill`, `Integer`, `Integer+` | Image scaling mode |
-| `imageFit` | `Original`, `Stretch`, `Cinema Zoom` | Aspect ratio handling |
-
-#### Clean Mode Settings
-
-| Setting | Values | Description |
-|---------|--------|-------------|
-| `interpolationAlg` | `BC Spline`, `Bilinear`, `Blackman Harris`, `Lanczos2` | Upscaling algorithm |
-| `gammaTransferFunction` | `Tube`, `Modern`, `Professional` | Gamma curve |
-| `sharpness` | `Very Soft`, `Soft`, `Medium`, `Sharp`, `Very Sharp` | Sharpness level |
-| `imageSize` | `Fill`, `Integer`, `Integer+` | Image scaling mode |
-| `imageFit` | `Original`, `Stretch`, `Cinema Zoom` | Aspect ratio handling |
+Older firmware wrote camelCase keys with Title-case values (for example
+`"horizontalBeamConvergence": "Professional"`, `"overclock": "Enhanced+"`), a
+top-level `"title"`, and JSON with trailing commas. Files in this format that the
+1.5.1 update didn't convert (game folders no longer in `library.db`) are ignored
+by the console. A3D Manager detects them but doesn't use or convert them, because
+the update reset the settings they describe.
 
 ### library.db (Game Library Database)
 

@@ -1,0 +1,61 @@
+{
+  "title": "Unknown Cartridge",
+  "display": {
+    "odm": "bvm",
+    "catalog": {
+      "bvm": {
+        "horizontalBeamConvergence": "Professional",
+        "verticalBeamConvergence": "Professional",
+        "enableEdgeOvershoot": false,
+        "enableEdgeHardness": false,
+        "imageSize": "Fill",
+        "imageFit": "Original"
+      },
+      "pvm": {
+        "horizontalBeamConvergence": "Professional",
+        "verticalBeamConvergence": "Professional",
+        "enableEdgeOvershoot": true,
+        "enableEdgeHardness": false,
+        "imageSize": "Fill",
+        "imageFit": "Original"
+      },
+      "crt": {
+        "horizontalBeamConvergence": "Consumer",
+        "verticalBeamConvergence": "Consumer",
+        "enableEdgeOvershoot": true,
+        "enableEdgeHardness": false,
+        "imageSize": "Fill",
+        "imageFit": "Original"
+      },
+      "scanlines": {
+        "horizontalBeamConvergence": "Off",
+        "verticalBeamConvergence": "Off",
+        "enableEdgeOvershoot": false,
+        "enableEdgeHardness": false,
+        "imageSize": "Fill",
+        "imageFit": "Original"
+      },
+      "clean": {
+        "interpolationAlg": "BC Spline",
+        "gammaTransferFunction": "Tube",
+        "sharpness": "Medium",
+        "imageSize": "Fill",
+        "imageFit": "Original"
+      }
+    },
+  },
+  "hardware": {
+    "virtualExpansionPak": true,
+    "region": "Auto",
+    "disableDeblur": false,
+    "enable32BitColor": false,
+    "forceProgressiveOutput": false,
+    "disableTextureFiltering": false,
+    "disableAntialiasing": false,
+    "forceOriginalHardware": false,
+    "overclock": "Auto"
+  },
+  "library": {
+    "cartcolor": "gray"
+  }
+}

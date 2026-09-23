@@ -124,7 +124,11 @@ export function HelpPage() {
               Label changes stay on your computer until you click "Sync Now" next to the label status in the
               header, which writes <code>labels.db</code> to your SD card
             </li>
-            <li>Per-game settings are saved to the SD card automatically while it's connected</li>
+            <li>
+              Per-game settings are saved to the SD card automatically while it's connected. This needs a console
+              on 3D<sup>os</sup> 1.5.1 or later, which changed the settings format; for older cards the app explains
+              how to update first
+            </li>
             <li>
               Controller Pak saves are copied between your computer and the card from the Game Pak tab, which
               also helps you choose when the two differ
