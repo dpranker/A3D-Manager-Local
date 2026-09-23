@@ -9,6 +9,8 @@ interface CartridgeCardProps {
   selectionMode: boolean;
   isSelected: boolean;
   imageCacheBuster?: number;
+  /** Shell color from the console's cartridge color setting; default shell if unset */
+  shellColor?: string;
   onClick: () => void;
 }
 
@@ -20,6 +22,7 @@ export function CartridgeCard({
   selectionMode,
   isSelected,
   imageCacheBuster,
+  shellColor,
   onClick,
 }: CartridgeCardProps) {
   const imageUrl = hasLabel
@@ -40,6 +43,7 @@ export function CartridgeCard({
           color="dark"
           size="large"
           className="cart-sprite-base"
+          shellColor={shellColor}
         />
         <CartridgeSprite
           artworkUrl={imageUrl}
@@ -47,6 +51,8 @@ export function CartridgeCard({
           color="black"
           size="large"
           className="cart-sprite-hover"
+          // Hover darkens the shell: black for the default shell, a darker shade of a custom color
+          shellColor={shellColor ? `color-mix(in srgb, ${shellColor} 60%, black)` : undefined}
         />
       </div>
       <div className="cartridge-card-info">

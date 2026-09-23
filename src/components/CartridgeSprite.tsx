@@ -13,11 +13,21 @@ interface CartridgeSpriteProps {
   color?: CartridgeSpriteColor;
   /** Size of the sprite */
   size?: CartridgeSpriteSize;
+  /** Tint the shell with this CSS color instead of `color` (the console's cartridge color setting) */
+  shellColor?: string;
   /** Optional className for additional styling */
   className?: string;
 }
 
 const PLACEHOLDER_URL = '/cart-placeholder.png';
+
+/** Shells too dark to see on the app's black background get an outline (in practice: black carts) */
+function isNearBlack(color: string | undefined): boolean {
+  const hex = color && /^#([0-9a-f]{6})$/i.exec(color)?.[1];
+  if (!hex) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return r + g + b < 3 * 0x20;
+}
 
 export function CartridgeSprite({
   artworkUrl,
@@ -25,6 +35,7 @@ export function CartridgeSprite({
   color = 'dark',
   size = 'large',
   className = '',
+  shellColor,
 }: CartridgeSpriteProps) {
   const [imgSrc, setImgSrc] = useState(artworkUrl);
   const overlayImage = color === 'black' ? '/n64-cart-black.png' : '/n64-cart-dark.png';
@@ -41,7 +52,7 @@ export function CartridgeSprite({
   };
 
   return (
-    <div className={`cartridge-sprite cartridge-sprite--${size} ${className}`}>
+    <div className={`cartridge-sprite cartridge-sprite--${size} ${isNearBlack(shellColor) ? 'cartridge-sprite--outlined' : ''} ${className}`}>
       <img
         className="cartridge-sprite__artwork"
         src={imgSrc}
@@ -49,11 +60,19 @@ export function CartridgeSprite({
         loading="lazy"
         onError={handleError}
       />
-      <img
-        className="cartridge-sprite__overlay"
-        src={overlayImage}
-        alt=""
-      />
+      {shellColor ? (
+        // The shell sprites are a single flat color, so its shape works as a mask for any color
+        <span
+          className="cartridge-sprite__overlay cartridge-sprite__overlay--tinted"
+          style={{ backgroundColor: shellColor }}
+        />
+      ) : (
+        <img
+          className="cartridge-sprite__overlay"
+          src={overlayImage}
+          alt=""
+        />
+      )}
     </div>
   );
 }

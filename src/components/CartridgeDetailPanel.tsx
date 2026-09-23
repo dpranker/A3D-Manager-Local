@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useImageCache, useSettingsClipboard } from '../App';
-import { IconButton, OptionSelector, ToggleSwitch } from './controls';
+import { IconButton, OptionSelector, ToggleSwitch, ValueSelector } from './controls';
 import { Tooltip } from './ui/Tooltip';
 import { CartridgeSprite } from './CartridgeSprite';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { useLabelSync } from './LabelSyncIndicator';
+import { LibraryTab } from './LibraryTab';
 import { queueSettingsSave, onSaveStatus } from '../lib/settingsAutoSave';
 import {
   createDefaultSettings,
@@ -33,6 +34,8 @@ import './CartridgeDetailPanel.css';
 interface CartridgeDetailPanelProps {
   cartId: string;
   gameName?: string;
+  /** Shell color from the console's cartridge color setting */
+  shellColor?: string;
   sdCardPath?: string;
   onClose: () => void;
   onUpdate: () => void;
@@ -51,30 +54,6 @@ interface LookupResult {
 // Option arrays for controls
 const BIT_COLOR_OPTIONS = ['Off', 'Auto'];
 
-/** OptionSelector over stored settings values, showing the console's menu labels */
-function ValueSelector<T extends string>({
-  label,
-  values,
-  value,
-  onChange,
-}: {
-  label: string;
-  values: readonly T[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <OptionSelector
-      label={label}
-      options={values.map(valueLabel)}
-      value={valueLabel(value)}
-      onChange={(selected) => {
-        const match = values.find((v) => valueLabel(v) === selected);
-        if (match) onChange(match);
-      }}
-    />
-  );
-}
 
 // API response types matching backend
 interface SettingsInfoItem {
@@ -134,11 +113,12 @@ interface GamePakBackup {
   size: number;
 }
 
-type TabId = 'label' | 'settings' | 'gamepak';
+type TabId = 'label' | 'settings' | 'gamepak' | 'library';
 
 export function CartridgeDetailPanel({
   cartId,
   gameName,
+  shellColor,
   sdCardPath,
   onClose,
   onUpdate,
@@ -200,6 +180,25 @@ export function CartridgeDetailPanel({
   };
 
   const displayName = lookupResult?.name || gameName || 'Unknown Cartridge';
+  // library.json (3Dos 1.5.1+) is only for cartridges outside the built-in database
+  const showLibraryTab = lookupResult !== null && lookupResult.source !== 'internal';
+
+  // A title saved in library.json becomes the app's custom name for this cart
+  const handleLibraryTitleSaved = async (title: string) => {
+    try {
+      const response = await fetch(`/api/labels/user-cart/${cartId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: title }),
+      });
+      if (response.ok) {
+        setLookupResult((prev) => (prev ? { ...prev, found: true, source: 'user', name: title } : prev));
+        onUpdate();
+      }
+    } catch (err) {
+      console.error('Failed to update custom name:', err);
+    }
+  };
 
   return (
     <div className="slide-over-overlay" onClick={onClose}>
@@ -210,6 +209,7 @@ export function CartridgeDetailPanel({
             alt={displayName}
             color="dark"
             size="small"
+            shellColor={shellColor}
           />
           <div className="slide-over-title">
             <h2>{displayName}</h2>
@@ -241,6 +241,14 @@ export function CartridgeDetailPanel({
             >
               Game Pak
             </button>
+            {showLibraryTab && (
+              <button
+                className={`tab-btn ${activeTab === 'library' ? 'active' : ''}`}
+                onClick={() => setActiveTab('library')}
+              >
+                Library
+              </button>
+            )}
           </div>
           <div className="ownership-toggle">
             <ToggleSwitch
@@ -278,6 +286,14 @@ export function CartridgeDetailPanel({
               cartId={cartId}
               sdCardPath={sdCardPath}
               gameName={displayName}
+            />
+          )}
+          {activeTab === 'library' && showLibraryTab && (
+            <LibraryTab
+              cartId={cartId}
+              sdCardPath={sdCardPath}
+              customName={lookupResult?.source === 'user' ? lookupResult.name : undefined}
+              onTitleSaved={handleLibraryTitleSaved}
             />
           )}
         </div>
