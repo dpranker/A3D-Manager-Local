@@ -1,8 +1,8 @@
 # Desktop packaging: npm run electron:build (builds for the current OS; Linux -> AppImage)
-appId: com.dpranker.a3dmanager
+appId: com.dpranker.a3dmanagerlocal
 productName: A3D Manager
-executableName: a3d-manager
-artifactName: A3D-Manager-${version}-${arch}.${ext}
+executableName: a3d-manager-local
+artifactName: A3D-Manager-Local-${version}-${arch}.${ext}
 
 directories:
   output: release
@@ -22,7 +22,7 @@ files:
 
 # Wayland app_id / WM_CLASS, so the window matches the generated .desktop entry
 extraMetadata:
-  desktopName: a3d-manager.desktop
+  desktopName: a3d-manager-local.desktop
   description: Desktop companion app for managing Analogue 3D SD cards (labels, settings, game paks, firmware)
   author: dpranker
 

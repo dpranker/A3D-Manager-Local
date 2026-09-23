@@ -23,7 +23,7 @@ jobs:
           - name: Linux
             os: ubuntu-latest
             artifacts: release/*.AppImage
-            executable: release/linux-unpacked/a3d-manager
+            executable: release/linux-unpacked/a3d-manager-local
             # chrome-sandbox isn't setuid in the unpacked dir, and Ubuntu 24.04
             # restricts unprivileged user namespaces
             smoke-prefix: xvfb-run -a
@@ -31,7 +31,7 @@ jobs:
           - name: Windows
             os: windows-latest
             artifacts: release/*.exe
-            executable: release/win-unpacked/a3d-manager.exe
+            executable: release/win-unpacked/a3d-manager-local.exe
             smoke-prefix: ''
             smoke-args: ''
     defaults:
