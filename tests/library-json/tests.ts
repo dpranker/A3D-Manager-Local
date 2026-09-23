@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { test, assert, assertEqual, TestSuite } from '../utils.js';
 import {
+  getRetailColors,
   createDefaultLibrary,
   normalizeLibrary,
   parseLibrary,
@@ -101,6 +102,22 @@ export const libraryJsonSuite: TestSuite = {
       // settings.json spells it disable_antialiasing; library.json needs disable_anti_aliasing
       const { disable_anti_aliasing: _correct, ...otherDefaults } = file.defaults;
       expectInvalid({ ...file, defaults: { ...otherDefaults, disable_antialiasing: _correct } }, 'defaults.disable_anti_aliasing');
+    }),
+
+    test('retail color table: known cart IDs, console palette colors, sources noted', async () => {
+      const file = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'data', 'retail-colors.json'), 'utf-8'));
+      const cartIds = new Set(
+        (JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'data', 'cart-names.json'), 'utf-8')) as { id: string }[]).map((e) => e.id),
+      );
+      const entries = Object.entries(file.colors as Record<string, string>);
+      assert(entries.length >= 40, `expected ~41 entries, got ${entries.length}`);
+      assert(entries.every(([id]) => cartIds.has(id)), 'every cart ID is in data/cart-names.json');
+      assert(entries.every(([, c]) => ['gray', 'red', 'green', 'blue', 'yellow', 'gold', 'black', 'purple', 'rose'].includes(c)), 'console palette');
+      assert(typeof file._source === 'string' && file._source.includes('http'), 'source recorded');
+      const colors = await getRetailColors();
+      assertEqual(colors['89239b0e'], 'yellow', 'Donkey Kong 64');
+      assertEqual(colors['c240e949'], 'black', 'Armorines (matches what the console recorded)');
+      assertEqual(colors['ee0902de'], 'red', 'NBA Jam 2000 (matches what the console recorded)');
     }),
 
     test('unknown keys are dropped', () => {
