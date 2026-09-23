@@ -338,14 +338,12 @@ export async function downloadFirmware(release: FirmwareRelease, onProgress: Pro
 
 export interface InstallResult {
   fileName: string;
-  /** Older update files removed from the card root */
-  removed: string[];
 }
 
 /**
- * Copy the update file to the card root, then remove any other a3d_os_*.bin
- * there (the console expects exactly one). The new file is written and verified
- * before anything is removed.
+ * Copy the update file to the card root, written as .partial and renamed once
+ * verified. Existing update files are left alone: the console archives them
+ * itself (3Dos 1.5.1+ moves them to /System/Archived after updating).
  */
 export async function installFirmwareToSD(
   localPath: string,
@@ -370,15 +368,11 @@ export async function installFirmwareToSD(
     throw error;
   }
 
-  const removed: string[] = [];
+  // Clear leftovers from earlier interrupted copies (only our own .partial files)
   for (const name of await readdir(sdCardPath)) {
-    const isOtherUpdate = versionFromFileName(name) !== null && name !== fileName;
-    const isStalePartial = /^a3d_os_.*\.bin\.partial$/i.test(name);
-    if (isOtherUpdate || isStalePartial) {
-      // Delete outright: moving to a trash folder would leave it on the card
-      await unlink(path.join(sdCardPath, name));
-      removed.push(name);
+    if (/^a3d_os_.*\.bin\.partial$/i.test(name)) {
+      await unlink(path.join(sdCardPath, name)).catch(() => {});
     }
   }
-  return { fileName, removed };
+  return { fileName };
 }

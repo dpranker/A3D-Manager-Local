@@ -53,7 +53,7 @@ type InstallState =
   | { step: 'idle' }
   | { step: 'confirm' }
   | { step: 'running'; progress: InstallProgress | null }
-  | { step: 'complete'; version: string; fileName: string; removed: string[] }
+  | { step: 'complete'; version: string; fileName: string }
   | { step: 'error'; message: string };
 
 function formatDate(iso: string | null): string {
@@ -152,7 +152,7 @@ export function FirmwareSection() {
       } else if (data.type === 'complete') {
         finished = true;
         events.close();
-        setInstall({ step: 'complete', version: data.version, fileName: data.fileName, removed: data.removed });
+        setInstall({ step: 'complete', version: data.version, fileName: data.fileName });
         checkStatus();
       } else if (data.type === 'error') {
         finished = true;
@@ -258,15 +258,15 @@ export function FirmwareSection() {
 
             {install.step === 'idle' && (
               <p className="setting-description">
-                Downloads the update from analogue.co and writes it to the root of your SD card
-                {oldRootFiles.length > 0 && <>, replacing {oldRootFiles.map((f) => f.name).join(', ')}</>}.
+                Downloads the update from analogue.co and writes it to the root of your SD card. Existing update
+                files are left in place.
               </p>
             )}
 
             {install.step === 'confirm' && (
               <p className="setting-description firmware-confirm">
                 This writes <code>{firmwareFileName(latest.version)}</code> to the card root
-                {oldRootFiles.length > 0 && <> and deletes {oldRootFiles.map((f) => f.name).join(', ')} from it</>}. Continue?
+                {oldRootFiles.length > 0 && <> alongside {oldRootFiles.map((f) => f.name).join(', ')}</>}. Continue?
               </p>
             )}
 
@@ -327,8 +327,7 @@ export function FirmwareSection() {
               3D<sup>os</sup> {install.version} is on your SD card
             </h3>
             <p className="setting-description">
-              Wrote <code>{install.fileName}</code>
-              {install.removed.length > 0 && <> and removed {install.removed.join(', ')}</>}. Next: eject the card, put
+              Wrote <code>{install.fileName}</code> to the card root. Next: eject the card, put
               it in your Analogue 3D and power on. The update starts automatically (yellow power LED, blinking
               controller LEDs) and takes 3–6 minutes. Don't power off during the update.{' '}
               {latest && (

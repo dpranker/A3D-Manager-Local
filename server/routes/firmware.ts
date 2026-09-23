@@ -92,7 +92,7 @@ router.get('/install-stream', async (req, res: Response) => {
 
     const localPath = await downloadFirmware(release, (p) => send(progressEvent('download', p)));
     const result = await installFirmwareToSD(localPath, release.version, sdCardPath, (p) => send(progressEvent('copy', p)));
-    console.log(`Copied 3Dos ${release.version} to ${sdCardPath} (removed: ${result.removed.join(', ') || 'none'})`);
+    console.log(`Copied 3Dos ${release.version} to ${sdCardPath}`);
 
     send({ type: 'complete', version: release.version, ...result });
   } catch (error) {
