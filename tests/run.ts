@@ -16,6 +16,7 @@ import { cartridgeDataSuite, cleanOutput as cleanCartridgeOutput } from './cartr
 import { bundleArchiveSuite, cleanOutput as cleanBundleOutput } from './bundle-archive/tests.js';
 import { sdCardSuite } from './sd-card/tests.js';
 import { firmwareSuite } from './firmware/tests.js';
+import { libraryJsonSuite } from './library-json/tests.js';
 
 const verbose = process.argv.includes('--verbose');
 
@@ -71,6 +72,13 @@ async function main() {
   console.log(`└───────────────────────────────────────────────────────────────┘`);
   const firmwareResults = await runSuite(firmwareSuite);
   allResults.push(...firmwareResults);
+
+  // library.json Tests
+  console.log(`\n┌───────────────────────────────────────────────────────────────┐`);
+  console.log(`│  ${libraryJsonSuite.name} (${libraryJsonSuite.tests.length} tests)`);
+  console.log(`└───────────────────────────────────────────────────────────────┘`);
+  const libraryJsonResults = await runSuite(libraryJsonSuite);
+  allResults.push(...libraryJsonResults);
 
   // Print summary
   printSummary(allResults);
