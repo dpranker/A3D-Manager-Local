@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trimmed copy of https://www.analogue.co/feed/firmwares (2026-09-23) -->
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <channel>
+        <title>Analogue Firmwares</title>
+        <link>https://www.analogue.co/feed/firmwares</link>
+        <description>The latest firmware for Analogue products.</description>
+        <item>
+            <title><![CDATA[3D Firmware 1.5.0]]></title>
+            <link>https://www.analogue.co/support/3d/firmware/1.5.0</link>
+            <guid isPermaLink="false">https://www.analogue.co/support/3d/firmware/1.5.0</guid>
+            <pubDate>Tue, 21 Jul 2026 15:13:59 GMT</pubDate>
+            <content:encoded><![CDATA[<ul><li><p>Initial release notes</p></li></ul>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Pocket Firmware 2.9]]></title>
+            <link>https://www.analogue.co/support/pocket/firmware/2.9</link>
+            <guid isPermaLink="false">https://www.analogue.co/support/pocket/firmware/2.9</guid>
+            <pubDate>Thu, 17 Sep 2026 15:00:00 GMT</pubDate>
+            <content:encoded><![CDATA[<ul><li><p>Not a 3D release</p></li></ul>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[3D Firmware 1.5.1]]></title>
+            <link>https://www.analogue.co/support/3d/firmware/1.5.1</link>
+            <guid isPermaLink="false">https://www.analogue.co/support/3d/firmware/1.5.1</guid>
+            <pubDate>Wed, 23 Sep 2026 15:12:32 GMT</pubDate>
+            <content:encoded><![CDATA[<h2>General</h2><ul><li><p>New: Overclocking and Force Original Hardware are now adjustable in-game <superscript>1</superscript></p></li></ul><h2>OS</h2><ul><li><p>Improved: 3DOS update files are moved to ‘/System/Archived’ on the SD card after updating</p></li><li><p>Fix: Issue with R&amp;D &lt;menu&gt; toggles</p></li></ul><p></p><p><em>Note: The last stage of this OS update may take longer than normal.</em></p><ol><li><p><em>For more information visit the </em><a href="https://www.analogue.co/developer/docs/platform/library-json"><em>Platform docs</em></a></p></li></ol>]]></content:encoded>
+        </item>
+    </channel>
+</rss>
