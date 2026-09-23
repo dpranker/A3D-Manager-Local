@@ -1,7 +1,8 @@
-# a3d-local-manager roadmap
+# A3D Manager Local roadmap
 
 ## Decisions
-- Private standalone repo (GitHub forbids private forks of public repos); upstream tracked as a git remote.
+- Public fork of TheLeggett/A3D-Manager: github.com/dpranker/A3D-Manager-Local (since 2026-09-23; origin). Upstream is tracked as the `upstream` remote and history stays mergeable. Development started in a private standalone repo (dpranker/a3d-local-manager, now archived, remote `private`; it holds PRs #1-#7). Before publishing, commit identities were rewritten to dpranker <3966993+dpranker@users.noreply.github.com>. PRs must target the fork (`gh repo set-default dpranker/A3D-Manager-Local`), never upstream.
+- License: MIT, keeping upstream's notice plus "Copyright (c) 2026 dpranker".
 - Desktop shell: Electron, running the existing Express server in-process (keep sharp and fs-based SD card access).
 - Firmware releases come from Analogue's documented firmware API (https://www.analogue.co/developer/docs/api): GET /support/3d/firmware/list (versions + dates), /support/3d/firmware/{version|latest}/details (file_name, download_url on assets.analogue.co, md5, file_size, release notes as HTML and Markdown), /latest (307 to the version page) and /{version}/download. Downloads are verified against the published MD5, and the copy on the card is read back and compared. (Earlier options: the RSS feed https://www.analogue.co/feed/firmwares, or scraping the support page; neither has checksums.)
 - Installed firmware detection: the only marker on the card is the a3d_os_MM_mm_pp.bin update file. Up to 1.5.0 the console leaves it in the card root after installing; 1.5.1+ moves it to /System/Archived after installing (confirmed on a real card, 2026-09-23). Root file newer than the archive = pending. Two update files in the root conflict (found on a 1.5.0 console), so when copying a new update the app deletes other root update files, as Analogue's install guide says. /System/Archived is never touched.
