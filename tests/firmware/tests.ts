@@ -177,7 +177,7 @@ export const firmwareSuite: TestSuite = {
     // Install to SD
     // =========================================================================
 
-    test('installFirmwareToSD adds the new file and leaves existing update files alone', withCard(
+    test('installFirmwareToSD replaces other root update files and leaves the archive and trash alone', withCard(
       {
         'a3d_os_01_05_00.bin': 10,
         'a3d_os_01_04_00.bin.partial': 3,
@@ -190,9 +190,10 @@ export const firmwareSuite: TestSuite = {
         try {
           const result = await installFirmwareToSD(source, '1.5.1', card, () => {});
           assertEqual(result.fileName, 'a3d_os_01_05_01.bin');
+          assertEqual(result.removed.join(','), 'a3d_os_01_05_00.bin');
 
-          const rootFiles = readdirSync(card).filter((f) => f.startsWith('a3d_os')).sort();
-          assertEqual(rootFiles.join(','), 'a3d_os_01_05_00.bin,a3d_os_01_05_01.bin', 'old file kept, stale .partial cleared');
+          const rootFiles = readdirSync(card).filter((f) => f.startsWith('a3d_os'));
+          assertEqual(rootFiles.join(','), 'a3d_os_01_05_01.bin', 'only the new file remains, stale .partial cleared');
           assert(readFileSync(path.join(card, 'a3d_os_01_05_01.bin')).equals(readFileSync(source)), 'contents copied');
           assert(existsSync(path.join(card, 'System/Archived/a3d_os_01_04_00.bin')), "console's archive untouched");
           assert(existsSync(path.join(card, '.Trash-1000/files/a3d_os_01_03_00.bin')), 'trash untouched');
