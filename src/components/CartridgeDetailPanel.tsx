@@ -6,6 +6,7 @@ import { CartridgeSprite } from './CartridgeSprite';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { useLabelSync } from './LabelSyncIndicator';
 import { LibraryTab } from './LibraryTab';
+import { cartridgeShellColor } from '../lib/cartColors';
 import { queueSettingsSave, onSaveStatus } from '../lib/settingsAutoSave';
 import {
   createDefaultSettings,
@@ -127,6 +128,8 @@ export function CartridgeDetailPanel({
   const [activeTab, setActiveTab] = useState<TabId>('label');
   const [isOwned, setIsOwned] = useState(false);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  // Follows the Settings tab's Cartridge Color live; starts with the grid's value
+  const [currentShellColor, setCurrentShellColor] = useState(shellColor);
   const { imageCacheBuster: globalCacheBuster } = useImageCache();
   const [localCacheBuster, setLocalCacheBuster] = useState(() => Date.now());
   // Combine global and local cache busters
@@ -209,7 +212,7 @@ export function CartridgeDetailPanel({
             alt={displayName}
             color="dark"
             size="small"
-            shellColor={shellColor}
+            shellColor={currentShellColor}
           />
           <div className="slide-over-title">
             <h2>{displayName}</h2>
@@ -272,6 +275,7 @@ export function CartridgeDetailPanel({
               onUpdate={onUpdate}
               onClose={onClose}
               onDelete={onDelete}
+              shellColor={currentShellColor}
             />
           )}
           {activeTab === 'settings' && (
@@ -279,6 +283,7 @@ export function CartridgeDetailPanel({
               cartId={cartId}
               sdCardPath={sdCardPath}
               gameName={displayName}
+              onCartridgeColorChange={(color) => setCurrentShellColor(cartridgeShellColor(color))}
             />
           )}
           {activeTab === 'gamepak' && (
@@ -315,6 +320,7 @@ interface LabelTabProps {
   onUpdate: () => void;
   onClose: () => void;
   onDelete?: () => void;
+  shellColor?: string;
 }
 
 function LabelTab({
@@ -326,6 +332,7 @@ function LabelTab({
   onUpdate,
   onClose,
   onDelete,
+  shellColor,
 }: LabelTabProps) {
   const { markLocalChanges } = useLabelSync();
   const [file, setFile] = useState<File | null>(null);
@@ -579,6 +586,7 @@ function LabelTab({
             alt="Current label"
             color="dark"
             size="large"
+            shellColor={shellColor}
           />
         </div>
 
@@ -658,6 +666,8 @@ interface SettingsTabProps {
   cartId: string;
   sdCardPath?: string;
   gameName?: string;
+  /** Reports the Cartridge Color as settings load and change, for the cart previews */
+  onCartridgeColorChange?: (color: string) => void;
 }
 
 // Helper to compare settings objects (shallow comparison of key values)
@@ -669,7 +679,7 @@ function settingsAreDifferent(a: CartridgeSettings | undefined, b: CartridgeSett
 
 type ConflictResolution = 'pending' | 'use-local' | 'use-sd' | 'resolved';
 
-function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
+function SettingsTab({ cartId, sdCardPath, gameName, onCartridgeColorChange }: SettingsTabProps) {
   const [info, setInfo] = useState<SettingsInfoResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1010,6 +1020,7 @@ function SettingsTab({ cartId, sdCardPath, gameName }: SettingsTabProps) {
             cartId={cartId}
             settings={info.local.settings}
             sdCardPath={syncPath}
+            onCartridgeColorChange={onCartridgeColorChange}
             onSettingsChange={(newSettings) => {
               // Update local info so copy settings uses current values
               setInfo(prev => prev ? {
@@ -1101,11 +1112,12 @@ interface SettingsEditorProps {
   settings: CartridgeSettings;
   sdCardPath?: string;
   onSettingsChange?: (settings: CartridgeSettings) => void;
+  onCartridgeColorChange?: (color: string) => void;
 }
 
 type SettingsEditorTab = 'display' | 'hardware';
 
-function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSettingsChange }: SettingsEditorProps) {
+function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSettingsChange, onCartridgeColorChange }: SettingsEditorProps) {
   const [activeTab, setActiveTab] = useState<SettingsEditorTab>('display');
   const [settings, setSettings] = useState<CartridgeSettings>(initialSettings);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1142,6 +1154,17 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
   useEffect(() => {
     onSettingsChangeRef.current = onSettingsChange;
   }, [onSettingsChange]);
+
+  // Report the cartridge color (on load and on change) so the cart previews follow it.
+  // Same ref pattern as onSettingsChange: the parent's callback changes every render.
+  const onCartridgeColorChangeRef = useRef(onCartridgeColorChange);
+  useEffect(() => {
+    onCartridgeColorChangeRef.current = onCartridgeColorChange;
+  }, [onCartridgeColorChange]);
+  const cartridgeColor = settings.library.cartridge_color;
+  useEffect(() => {
+    onCartridgeColorChangeRef.current?.(cartridgeColor);
+  }, [cartridgeColor]);
 
   // Auto-save when settings actually change from initial/saved state
   useEffect(() => {
