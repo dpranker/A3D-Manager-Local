@@ -351,12 +351,37 @@ async function readCartridgeColors(gamesDir: string): Promise<Record<string, Car
 }
 
 /**
- * Cartridge color per game (lowercase cart IDs). The console writes a color into
+ * Cartridge color per game (lowercase cart IDs), lowest to highest priority: the
+ * built-in retail colors, the SD card, local copies. The console writes a color into
  * every settings.json it creates, including retail carts that shipped in colored
  * shells, so with an SD card connected its files fill in games that have no local
  * copy; local copies win where both exist (they hold the latest edits).
  */
 export async function getCartridgeColors(sdCardPath?: string): Promise<Record<string, CartridgeColor>> {
   const fromCard = sdCardPath ? await readCartridgeColors(sdGamesDir(sdCardPath)) : {};
-  return { ...fromCard, ...(await readCartridgeColors(getLocalGamesDir())) };
+  return { ...(await getRetailColors()), ...fromCard, ...(await readCartridgeColors(getLocalGamesDir())) };
+}
+
+let retailColors: Record<string, CartridgeColor> | null = null;
+
+/**
+ * Default retail shell colors (data/retail-colors.json) for games the console
+ * hasn't recorded a color for, so the "All" grid shows e.g. Donkey Kong 64 in
+ * yellow. North American releases only; best effort (see the file's notes).
+ */
+export async function getRetailColors(): Promise<Record<string, CartridgeColor>> {
+  if (retailColors) return retailColors;
+  try {
+    const data = JSON.parse(await readFile(path.join(process.cwd(), 'data', 'retail-colors.json'), 'utf-8')) as {
+      colors?: Record<string, unknown>;
+    };
+    retailColors = Object.fromEntries(
+      Object.entries(data.colors ?? {}).filter((entry): entry is [string, CartridgeColor] =>
+        (CARTRIDGE_COLOR_VALUES as readonly unknown[]).includes(entry[1]),
+      ),
+    );
+  } catch {
+    retailColors = {};
+  }
+  return retailColors;
 }
