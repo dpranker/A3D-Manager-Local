@@ -9,6 +9,7 @@ import { ImportBundleModal } from './ImportBundleModal';
 import { AddCartridgeModal } from './AddCartridgeModal';
 import { LabelsImportModal } from './LabelsImportModal';
 import { useLabelSync } from './LabelSyncIndicator';
+import { FirmwareSection } from './FirmwareSection';
 import { Button } from './ui';
 import './SettingsPage.css';
 
@@ -358,6 +359,8 @@ export function SettingsPage() {
     <div className="settings-page">
       <div className="settings-content">
         <h1>Settings</h1>
+
+        <FirmwareSection />
 
         {/* Backup & Restore */}
         <section className="settings-section">
