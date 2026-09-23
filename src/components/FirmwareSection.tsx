@@ -66,10 +66,6 @@ function firmwareFileName(version: string): string {
   return `a3d_os_${version.split('.').map((p) => p.padStart(2, '0')).join('_')}.bin`;
 }
 
-function formatMB(bytes: number): string {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function ReleaseNotes({ release }: { release: FirmwareRelease }) {
   return (
     <details className="firmware-notes">
@@ -102,15 +98,18 @@ export function FirmwareSection() {
   const checkStatus = useCallback(
     async (refresh = false) => {
       setChecking(true);
+      // Let a manual check visibly complete one spin, even on a fast response.
+      const feedback = new Promise<void>((resolve) => window.setTimeout(resolve, refresh ? 600 : 0));
+      let nextStatus: FirmwareStatus;
       try {
         const params = new URLSearchParams();
         if (sdCardPath) params.set('sdCardPath', sdCardPath);
         if (refresh) params.set('refresh', '1');
         const response = await fetch(`/api/firmware/status?${params}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        setStatus(await response.json());
+        nextStatus = await response.json();
       } catch (err) {
-        setStatus({
+        nextStatus = {
           latest: null,
           newerReleases: [],
           checkedAt: null,
@@ -118,10 +117,11 @@ export function FirmwareSection() {
           sdCard: null,
           sdCardError: null,
           updateAvailable: false,
-        });
-      } finally {
-        setChecking(false);
+        };
       }
+      await feedback;
+      setStatus(nextStatus);
+      setChecking(false);
     },
     [sdCardPath],
   );
@@ -174,7 +174,6 @@ export function FirmwareSection() {
   const latest = status?.latest ?? null;
   const sdCard = status?.sdCard ?? null;
   const oldRootFiles = sdCard?.files.filter((f) => f.version !== latest?.version) ?? [];
-  const trashedBytes = sdCard?.trashedFiles.reduce((sum, f) => sum + f.size, 0) ?? 0;
   const running = install.step === 'running';
 
   let cardSummary: React.ReactNode;
@@ -242,11 +241,26 @@ export function FirmwareSection() {
             <strong>SD card:</strong> {cardSummary}
           </p>
           {status?.checkedAt && (
-            <p className="setting-description firmware-muted">Last checked {new Date(status.checkedAt).toLocaleTimeString()}</p>
+            <p className="setting-description firmware-muted" role="status">Last checked {new Date(status.checkedAt).toLocaleTimeString()}</p>
           )}
         </div>
-        <Button variant="secondary" onClick={() => checkStatus(true)} loading={checking} disabled={running}>
-          Check Now
+        <Button
+          variant="secondary"
+          className={`firmware-check${checking ? ' firmware-check--checking' : ''}`}
+          onClick={() => checkStatus(true)}
+          disabled={running || checking}
+          aria-busy={checking}
+        >
+          <span className="firmware-check-content">
+            <svg className="firmware-check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 7v5h-5" />
+              <path d="M20 12a8 8 0 1 0-2.3 5.7M20 7v5" />
+            </svg>
+            <span className="firmware-check-label">
+              <span style={{ visibility: checking ? 'hidden' : 'visible' }}>Check Now</span>
+              <span style={{ visibility: checking ? 'visible' : 'hidden' }}>Checking…</span>
+            </span>
+          </span>
         </Button>
       </div>
 
@@ -351,7 +365,7 @@ export function FirmwareSection() {
       )}
 
       {sdCard && sdCard.partialFiles.length > 0 && !running && (
-        <p className="setting-description firmware-error firmware-trash-note">
+        <p className="setting-description firmware-error firmware-file-note">
           Incomplete update file on the card: {sdCard.partialFiles.join(', ')}. An earlier copy didn't finish, usually
           because the card was removed before it was ejected. The console ignores this file.{' '}
           {status?.updateAvailable
@@ -360,13 +374,6 @@ export function FirmwareSection() {
         </p>
       )}
 
-      {sdCard && sdCard.trashedFiles.length > 0 && (
-        <p className="setting-description firmware-muted firmware-trash-note">
-          {sdCard.trashedFiles.length === 1 ? '1 old update file' : `${sdCard.trashedFiles.length} old update files`} (
-          {formatMB(trashedBytes)}) {sdCard.trashedFiles.length === 1 ? 'is' : 'are'} still on the card in its trash folder ({sdCard.trashedFiles[0].path.split('/')[0]}). Empty the trash in
-          your file manager while the card is connected to free the space.
-        </p>
-      )}
     </section>
   );
 }
