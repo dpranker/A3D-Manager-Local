@@ -130,7 +130,7 @@ The desktop app runs everything locally: no browser tab, no server to start, and
 - **SD card:** the app finds cards mounted under `/run/media/<user>` or `/media/<user>` (Linux) and `/Volumes` (macOS) automatically; otherwise click **Choose SD Card…** in the header and pick the card (the folder containing `Library/N64`) or the folder it's mounted under. The choice is remembered.
 - **Data location:** `~/.config/A3D Manager/workspace/` (Linux), `%APPDATA%\A3D Manager\workspace\` (Windows) or `~/Library/Application Support/A3D Manager/workspace/` (macOS).
 
-No release has been published yet; until then, build the app yourself (below).
+The first release is 0.1.0. You can also build the app yourself (below).
 
 ### Running From Source
 

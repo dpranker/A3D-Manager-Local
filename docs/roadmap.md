@@ -31,6 +31,9 @@
 - Files are written in the console's shape, not strictly the published schema: 3Dos 1.5.1 writes enable_edge_overshoot in pvm/crt/scanlines, which the schema (additionalProperties: false) doesn't allow. Every console-written file tested fails the published schema for that reason only; tests validate against the schema with that one field patched in.
 - Fixed along the way: upstream's Settings tab never auto-saved (a render loop kept resetting the save debounce, "Maximum update depth exceeded").
 
+## Next
+- Screenshot management (planned next): the console's screenshot folders on the SD card (Gallery/Screenshots/N64/<game>/, Gallery/4K Export/N64/, Memories/N64/<game>/ (all PNG files on a real card)). Not started.
+
 ## Status
 - [x] Push upstream history to origin
 - [x] Electron wrapper
