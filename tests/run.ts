@@ -15,6 +15,7 @@ import { fileTransferSuite, cleanOutput as cleanFileTransferOutput } from './fil
 import { cartridgeDataSuite, cleanOutput as cleanCartridgeOutput } from './cartridge-data/tests.js';
 import { bundleArchiveSuite, cleanOutput as cleanBundleOutput } from './bundle-archive/tests.js';
 import { sdCardSuite } from './sd-card/tests.js';
+import { firmwareSuite } from './firmware/tests.js';
 
 const verbose = process.argv.includes('--verbose');
 
@@ -63,6 +64,13 @@ async function main() {
   console.log(`└───────────────────────────────────────────────────────────────┘`);
   const sdCardResults = await runSuite(sdCardSuite);
   allResults.push(...sdCardResults);
+
+  // Firmware Tests
+  console.log(`\n┌───────────────────────────────────────────────────────────────┐`);
+  console.log(`│  ${firmwareSuite.name} (${firmwareSuite.tests.length} tests)`);
+  console.log(`└───────────────────────────────────────────────────────────────┘`);
+  const firmwareResults = await runSuite(firmwareSuite);
+  allResults.push(...firmwareResults);
 
   // Print summary
   printSummary(allResults);
