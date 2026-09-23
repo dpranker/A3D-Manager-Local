@@ -1,6 +1,6 @@
-# A3D Manager
+# A3D Manager Local
 
-![CI](https://github.com/TheLeggett/A3D-Manager/actions/workflows/ci.yml/badge.svg)
+**A3D Manager Local** is a fork of [TheLeggett/A3D-Manager](https://github.com/TheLeggett/A3D-Manager) that adds a desktop app (Electron, Linux AppImage and Windows installer), 3D<sup>os</sup> firmware updates, support for the 3D<sup>os</sup> 1.5.1 `settings.json` format, a `library.json` editor for unknown cartridges, and cartridge colors. It keeps upstream's history and stays mergeable with it; all credit for the original app goes to its authors.
 
 **The unofficial companion app for managing your Analogue 3D N64 cartridge collection.**
 
@@ -154,8 +154,8 @@ Native installation is recommended for the best experience, especially if you fr
 
 ```bash
 # Clone the repository
-git clone git@github.com:TheLeggett/A3D-Manager.git
-cd A3D-Manager
+git clone https://github.com/dpranker/A3D-Manager-Local.git
+cd A3D-Manager-Local
 
 # Install dependencies
 npm install
@@ -315,4 +315,4 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see [LICENSE](LICENSE) for details. Based on [A3D Manager](https://github.com/TheLeggett/A3D-Manager) by TheLeggett and contributors, also MIT licensed; the original copyright notice is kept in the LICENSE file as the license requires.
