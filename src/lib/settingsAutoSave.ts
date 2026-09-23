@@ -45,8 +45,7 @@ export function queueSettingsSave(
   }
 
   // Log pending save
-  const title = settings.title || cartId;
-  console.log(`[Settings] Unsaved changes for "${title}" (${cartId})`);
+  console.log(`[Settings] Unsaved changes for ${cartId}`);
 
   // Notify listeners of pending save
   notifyListeners(cartId, 'pending');
@@ -108,8 +107,7 @@ async function executeSave(cartId: string): Promise<SaveResult> {
     }
 
     // Notify success
-    const title = pending.settings.title || cartId;
-    console.log(`[Settings] Saved "${title}" (${cartId})${pending.sdCardPath ? ' + SD card' : ''}`);
+    console.log(`[Settings] Saved ${cartId}${pending.sdCardPath ? ' + SD card' : ''}`);
     notifyListeners(cartId, 'saved');
     return { success: true };
   } catch (err) {

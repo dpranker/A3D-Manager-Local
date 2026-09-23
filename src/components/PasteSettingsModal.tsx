@@ -24,7 +24,7 @@ export function PasteSettingsModal({
   const { copiedSettings } = useSettingsClipboard();
   const [isPasting, setIsPasting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<{ success: number; failed: number } | null>(null);
+  const [results, setResults] = useState<{ success: number; failed: number; sdFailed: number; sdError?: string } | null>(null);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -43,60 +43,36 @@ export function PasteSettingsModal({
 
     let successCount = 0;
     let failCount = 0;
+    let sdFailCount = 0;
+    let sdError: string | undefined;
 
     try {
       for (const targetCartId of selectedCartIds) {
         try {
-          // Determine the appropriate title for this target cartridge
-          // Priority: existing target title > system game name > fallback to "Unknown Cartridge"
-          let targetTitle = 'Unknown Cartridge';
-
-          // First, try to get the target's existing settings
-          try {
-            const existingResponse = await fetch(`/api/cartridges/${targetCartId}/settings`);
-            if (existingResponse.ok) {
-              const existingData = await existingResponse.json();
-              if (existingData.local?.settings?.title &&
-                  existingData.local.settings.title !== 'Unknown Cartridge') {
-                targetTitle = existingData.local.settings.title;
-              }
-            }
-          } catch {
-            // Ignore errors fetching existing settings
-          }
-
-          // If still "Unknown Cartridge", try the system game name
-          if (targetTitle === 'Unknown Cartridge') {
-            const systemName = cartIdToName[targetCartId];
-            if (systemName && systemName !== 'Unknown Cartridge') {
-              targetTitle = systemName;
-            }
-          }
-
-          // Create settings for target cart with the appropriate title
-          const settingsForTarget = {
-            ...copiedSettings.settings,
-            title: targetTitle,
-          };
-
-          // Save settings to local
-          const response = await fetch(`/api/cartridges/${targetCartId}/settings`, {
+          // Save settings to local (the title only names a new local folder for this cart)
+          const title = cartIdToName[targetCartId];
+          const query = title && title !== 'Unknown Cartridge' ? `?title=${encodeURIComponent(title)}` : '';
+          const response = await fetch(`/api/cartridges/${targetCartId}/settings${query}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settingsForTarget),
+            body: JSON.stringify(copiedSettings.settings),
           });
 
           if (!response.ok) {
             throw new Error(`Failed to save settings for ${targetCartId}`);
           }
 
-          // If SD card is connected, also upload to SD
+          // If SD card is connected, also upload to SD (refused for cards not yet on 3Dos 1.5.1)
           if (sdCardPath) {
-            await fetch(`/api/cartridges/${targetCartId}/settings/upload`, {
+            const sdResponse = await fetch(`/api/cartridges/${targetCartId}/settings/upload`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ sdCardPath }),
             });
+            if (!sdResponse.ok) {
+              sdFailCount++;
+              sdError ??= ((await sdResponse.json().catch(() => ({}))) as { error?: string }).error;
+            }
           }
 
           successCount++;
@@ -106,10 +82,10 @@ export function PasteSettingsModal({
         }
       }
 
-      setResults({ success: successCount, failed: failCount });
+      setResults({ success: successCount, failed: failCount, sdFailed: sdFailCount, sdError });
 
       // If all succeeded, auto-close after a brief delay
-      if (failCount === 0) {
+      if (failCount === 0 && sdFailCount === 0) {
         setTimeout(() => {
           // Reset state before closing so next open shows confirmation
           setResults(null);
@@ -133,7 +109,7 @@ export function PasteSettingsModal({
 
   const footer = results ? (
     <div className="paste-results-footer">
-      {results.failed === 0 ? (
+      {results.failed === 0 && results.sdFailed === 0 ? (
         <span className="paste-success-message">All settings applied successfully!</span>
       ) : (
         <Button variant="primary" onClick={handleClose}>
@@ -197,6 +173,15 @@ export function PasteSettingsModal({
               <div className="paste-result-failed">
                 <span className="result-icon">✗</span>
                 <span>Failed to apply settings to {results.failed} cartridge{results.failed !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+            {results.sdFailed > 0 && (
+              <div className="paste-result-failed">
+                <span className="result-icon">✗</span>
+                <span>
+                  Not copied to the SD card for {results.sdFailed} cartridge{results.sdFailed !== 1 ? 's' : ''}
+                  {results.sdError ? `: ${results.sdError}` : ''}
+                </span>
               </div>
             )}
           </div>
