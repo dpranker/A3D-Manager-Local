@@ -332,14 +332,14 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, colorsRefreshKey, sdC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionFilter, languageFilter, videoModeFilter, searchQuery, ownedFilter, status?.imported]);
 
-  // Console cartridge colors (settings.json / library.json) for the locally stored games
+  // Console cartridge colors (settings.json / library.json): local copies, else the connected SD card
   const [cartColors, setCartColors] = useState<Record<string, string>>({});
   useEffect(() => {
-    fetch('/api/library/colors')
+    fetch(`/api/library/colors${sdCardPath ? `?sdCardPath=${encodeURIComponent(sdCardPath)}` : ''}`)
       .then((r) => (r.ok ? r.json() : { colors: {} }))
       .then((data: { colors: Record<string, string> }) => setCartColors(data.colors))
       .catch(() => setCartColors({}));
-  }, [refreshKey, colorsRefreshKey, labelsRefreshKey]);
+  }, [refreshKey, colorsRefreshKey, labelsRefreshKey, sdCardPath]);
 
   // Refetch when refreshKey changes (after delete/update)
   useEffect(() => {

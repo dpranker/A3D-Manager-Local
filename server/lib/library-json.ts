@@ -323,14 +323,9 @@ export async function downloadLibraryFromSD(cartId: string, sdCardPath: string):
   }
 }
 
-/**
- * Cartridge color for every locally stored game: the per-game setting
- * (settings.json library.cartridge_color) wins over the library.json default.
- * Files in older formats are skipped. Keys are lowercase cart IDs.
- */
-export async function getLocalCartridgeColors(): Promise<Record<string, CartridgeColor>> {
+/** Cartridge color per game folder in a Games directory: settings.json first, then the library.json default */
+async function readCartridgeColors(gamesDir: string): Promise<Record<string, CartridgeColor>> {
   const colors: Record<string, CartridgeColor> = {};
-  const gamesDir = getLocalGamesDir();
   for (const folder of await readdir(gamesDir).catch(() => [] as string[])) {
     const cartId = /([0-9a-fA-F]{8})$/.exec(folder)?.[1]?.toLowerCase();
     if (!cartId) continue;
@@ -353,4 +348,15 @@ export async function getLocalCartridgeColors(): Promise<Record<string, Cartridg
     }
   }
   return colors;
+}
+
+/**
+ * Cartridge color per game (lowercase cart IDs). The console writes a color into
+ * every settings.json it creates, including retail carts that shipped in colored
+ * shells, so with an SD card connected its files fill in games that have no local
+ * copy; local copies win where both exist (they hold the latest edits).
+ */
+export async function getCartridgeColors(sdCardPath?: string): Promise<Record<string, CartridgeColor>> {
+  const fromCard = sdCardPath ? await readCartridgeColors(sdGamesDir(sdCardPath)) : {};
+  return { ...fromCard, ...(await readCartridgeColors(getLocalGamesDir())) };
 }
