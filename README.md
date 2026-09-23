@@ -1,5 +1,7 @@
 # A3D Manager Local
 
+![CI](https://github.com/dpranker/A3D-Manager-Local/actions/workflows/ci.yml/badge.svg)
+
 **A3D Manager Local** is a fork of [TheLeggett/A3D-Manager](https://github.com/TheLeggett/A3D-Manager) that adds a desktop app (Electron, Linux AppImage and Windows installer), 3D<sup>os</sup> firmware updates, support for the 3D<sup>os</sup> 1.5.1 `settings.json` format, a `library.json` editor for unknown cartridges, and cartridge colors. It keeps upstream's history and stays mergeable with it; all credit for the original app goes to its authors.
 
 **The unofficial companion app for managing your Analogue 3D N64 cartridge collection.**
@@ -83,18 +85,23 @@ Seamless synchronization with your Analogue 3D:
 - **Automatic settings sync** when SD card is connected
 - **Conflict detection** with resolution options when local and SD card data differ
 - **Import games from SD** to discover cartridges you've played
+- **Choose SD Card…** in the desktop app picks the card (or the folder it's mounted under) with a native folder picker
 
 ### Library Details for Unknown Cartridges
 
 For cartridges outside the console's built-in database (homebrew, flash carts, reproductions), the **Library** tab edits their `library.json` (3D<sup>os</sup> 1.5.1+): title, revision, developers, publishers, release year, players, regions, accessories, and the default settings they start with. The title also becomes the cartridge's name in A3D Manager.
 
+![Edit Cartridge - Library](src/assets/screenshots/Edit%20Cartridge%20-%20Library.png)
+
 ### Cartridge Colors
 
-The cartridge grid shows each cartridge in the color the console uses for it in its library (the per-game Cartridge Color setting, or the `library.json` default).
+The cartridge grid and previews show each cartridge in the color the console uses for it in its library: the per-game Cartridge Color setting, or the `library.json` default. Games without a local copy of their settings take the color from the connected SD card, where the console records it.
 
 ### 3Dos Firmware Updates
 
 Settings → Firmware uses Analogue's [firmware API](https://www.analogue.co/developer/docs/api) to check for new 3D<sup>os</sup> releases, shows the release notes, compares them with the update file on your SD card, and copies the new update to the card root (replacing any older update file there), verified against Analogue's published MD5 checksum. The console installs it the next time it's powered on.
+
+![Settings - Firmware](src/assets/screenshots/Settings%20-%20Firmware.png)
 
 ### Import & Export
 
@@ -112,45 +119,22 @@ Flexible backup and sharing options:
 
 ![Export Selection](src/assets/screenshots/Export%20Selection.png)
 
-### Getting Started Experience
+### Getting Started
 
-Easy onboarding for new users:
+### Desktop App (Recommended)
 
-- **Import Games from SD Card**: Scan your SD card to discover cartridges and download their settings
-- **Download Labels from SD Card**: Import existing label artwork from your Analogue 3D
+The desktop app runs everything locally: no browser tab, no server to start, and a native SD card picker. It doesn't need Node.js.
 
-![Initial State](src/assets/screenshots/Initial%20State.png)
+- **Linux:** download the `.AppImage` from the [Releases page](https://github.com/dpranker/A3D-Manager-Local/releases), make it executable (`chmod +x A3D-Manager-*.AppImage`) and run it. Some distributions need `libfuse2` installed to run AppImages. To get a menu entry with the app icon, integrate it with [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) or [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher). On Ubuntu 24.04 and later, Electron's sandbox is blocked by default; if the app doesn't start, run it with `--no-sandbox`.
+- **Windows:** download and run the `Setup .exe` from the Releases page. The installer isn't code-signed yet, so SmartScreen warns on first run (More info → Run anyway).
+- **SD card:** the app finds cards mounted under `/run/media/<user>` or `/media/<user>` (Linux) and `/Volumes` (macOS) automatically; otherwise click **Choose SD Card…** in the header and pick the card (the folder containing `Library/N64`) or the folder it's mounted under. The choice is remembered.
+- **Data location:** `~/.config/A3D Manager/workspace/` (Linux), `%APPDATA%\A3D Manager\workspace\` (Windows) or `~/Library/Application Support/A3D Manager/workspace/` (macOS).
 
-### Sync Progress
+No release has been published yet; until then, build the app yourself (below).
 
-Real-time feedback during sync operations:
+### Running From Source
 
-- **Progress bar** with percentage complete
-- **Transfer speed** and data transferred
-- **Estimated time remaining**
-
-![Sync Labels Progress](src/assets/screenshots/Sync%20Labels%20Progress.png)
-
-### Pre-Built Cart Database
-
-Comprehensive N64 cartridge database:
-
-- **340+ Analogue 3D cart IDs** mapped and annotated
-- Automatic game name, region, language, and video mode lookup
-- Support for homebrew and flash carts with custom naming
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20 or higher
-- An Analogue 3D with an SD card
-
-### Installation (Recommended)
-
-Native installation is recommended for the best experience, especially if you frequently plug/unplug your SD card.
+Requires **Node.js 22.12 or later** (24 LTS recommended).
 
 ```bash
 # Clone the repository
@@ -160,26 +144,22 @@ cd A3D-Manager-Local
 # Install dependencies
 npm install
 
-# Start the application
+# Desktop app with hot reload (main-process changes restart Electron)
+npm run electron:dev
+
+# Or the web version: opens at http://localhost:5173, with the backend API on port 3001
 npm run dev
 ```
 
-The app will open at `http://localhost:5173` with the backend API running on port 3001. Your SD card will be detected automatically and you can eject/re-insert it freely while the app runs.
+Build the desktop app with `npm run electron:build`: it packages for the current OS into `release/` (Linux: AppImage; Windows: NSIS installer). Each platform has to be built on that OS, because sharp's native binary is platform-specific. The macOS (`dmg`) target is configured in `electron-builder.yml` but isn't built or tested.
 
-### Desktop App
+In the web version, the SD card is found via `SD_VOLUMES_PATH` (see `.env.example`), and you can eject and re-insert it while the app runs. `electron:dev` and `npm run dev` share the repo's `.local/` folder.
 
-A3D Manager can also run as an Electron desktop app. The same Express server runs inside the app on `127.0.0.1` (random free port, local requests only), so there is no browser tab and nothing else to start.
+The Electron code lives in `electron/` (main process, preload, embedded server, build scripts) and `src/desktop/` (renderer bridge and SD card picker). The Express server runs inside the app on `127.0.0.1` (random free port, local requests only).
 
-```bash
-npm run electron:dev     # Electron + Vite hot reload (main-process changes restart Electron)
-npm run electron:build   # Package for the current OS -> release/ (Linux: AppImage)
-```
+### Releases
 
-- **Choose SD Card…** in the header opens a native folder picker. Select the card itself (the folder containing `Library/N64`) or the folder it's mounted under (e.g. `/run/media/<user>`). The choice is remembered. Until you pick one, the app uses `SD_VOLUMES_PATH` if set, otherwise `/run/media/<user>` or `/media/<user>` on Linux and `/Volumes` on macOS.
-- **Data location:** `electron:dev` shares the repo's `.local/` with `npm run dev`. The packaged app stores its data in `~/.config/A3D Manager/workspace/` (Linux), `~/Library/Application Support/A3D Manager/workspace/` (macOS) or `%APPDATA%\A3D Manager\workspace\` (Windows).
-- **Releases:** pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`. It builds the Linux AppImage and Windows installer on their own runners, smoke-tests both, and attaches them to a draft GitHub release for you to publish. The version comes from the tag. Builds are unsigned, so Windows SmartScreen will warn on first run.
-- The macOS (`dmg`) target is configured in `electron-builder.yml` but isn't built by the release workflow. Each platform must be built on that OS, because sharp's native binary is platform-specific.
-- The Electron code lives in `electron/` (main process, preload, embedded server, build scripts) and `src/desktop/` (renderer bridge and picker button).
+Pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`: it builds the Linux AppImage and Windows installer on their own runners, smoke-tests both, and attaches them to a draft GitHub release to review and publish. The version comes from the tag.
 
 ### Docker Installation
 
@@ -255,7 +235,7 @@ Due to how Docker Desktop works on macOS, you must **quit Docker Desktop entirel
 2. Start Docker Desktop
 3. Run `docker compose up -d`
 
-> **Note:** If you frequently need to eject your SD card, consider using the [native installation](#installation-recommended) instead, which has no restrictions on SD card ejection.
+> **Note:** If you frequently need to eject your SD card, consider using the [desktop app](#desktop-app-recommended) or [running from source](#running-from-source) instead, which have no restrictions on SD card ejection.
 
 #### Docker Configuration
 
@@ -269,10 +249,11 @@ Due to how Docker Desktop works on macOS, you must **quit Docker Desktop entirel
 
 ### Quick Start
 
-1. **Connect your SD card** - Insert your Analogue 3D SD card into your computer
-2. **Import your games** - Use "Import Games from SD Card" to discover your cartridges
+1. **Connect your SD card** - Insert your Analogue 3D SD card into your computer (in the desktop app, use **Choose SD Card…** if it isn't found)
+2. **Import your games** - Use "Import Owned from SD" to mark your cartridges as owned, and "Download Labels" to import the card's label artwork
 3. **Browse and configure** - Search for games, adjust settings, upload artwork
-4. **Changes sync automatically** - When your SD card is connected, changes sync in real-time
+4. **Sync** - Per-game settings save to the card automatically while it's connected; label changes are written with **Sync Now** in the header, and Controller Pak saves from the Game Pak tab
+5. **Eject the card** in your file manager before removing it
 
 ---
 
@@ -282,9 +263,10 @@ The Analogue 3D identifies N64 cartridges using a CRC32 checksum of the first 8 
 
 ### Data Storage
 
-- **Local storage**: All data is stored in `.local/` until explicitly synced
-- **SD card sync**: When connected, settings and game paks sync automatically
-- **Labels**: Synced via the "Sync Labels" button in the header
+- **Local storage**: All data is stored in `.local/` (in the desktop app, inside its data folder) until synced
+- **Settings**: Saved to the SD card automatically while it's connected (for consoles on 3D<sup>os</sup> 1.5.1 or later)
+- **Game paks**: Copied between your computer and the card from the Game Pak tab
+- **Labels**: Written to the card with **Sync Now** in the header
 
 ### Technical Documentation
 
@@ -292,6 +274,9 @@ The Analogue 3D identifies N64 cartridges using a CRC32 checksum of the first 8 
 - [Cart ID Algorithm](docs/CART_ID_ALGORITHM.md) - How cartridge identification works
 - [SD Card Format](docs/ANALOGUE_3D_SD_CARD_FORMAT.md) - Analogue 3D SD card structure
 - [Cartridge Management](docs/CARTRIDGE_MANAGEMENT.md) - Per-game settings and game pak management
+- [Firmware Changelog](docs/FIRMWARE_CHANGELOG.md) - SD card format changes across 3D<sup>os</sup> versions, including 1.5.1
+- [Analogue's JSON schemas](docs/analogue-schemas/) - Copies of the official `settings.json` and `library.json` schemas
+- [Roadmap](docs/roadmap.md) - This fork's decisions and open questions
 
 ---
 
@@ -299,6 +284,7 @@ The Analogue 3D identifies N64 cartridges using a CRC32 checksum of the first 8 
 
 - **Frontend**: React 19 + TypeScript + Vite
 - **Backend**: Express.js + TypeScript
+- **Desktop**: Electron (the Express server runs in-process), packaged with electron-builder
 - **Image Processing**: Sharp
 
 ---
