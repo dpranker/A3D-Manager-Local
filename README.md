@@ -159,7 +159,7 @@ The Electron code lives in `electron/` (main process, preload, embedded server, 
 
 ### Releases
 
-Pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`: it builds the Linux AppImage and Windows installer on their own runners, smoke-tests both, and attaches them to a draft GitHub release to review and publish. The version comes from the tag.
+Pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`: it builds the Linux AppImage and Windows installer on their own runners, smoke-tests both, and attaches them to a draft GitHub release to review and publish. The version comes from the tag. Add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md) before tagging; it becomes the release notes.
 
 ### Docker Installation
 

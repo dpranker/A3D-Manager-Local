@@ -85,6 +85,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           path: assets
@@ -98,7 +100,11 @@ jobs:
           ls -la assets
           PRERELEASE=""
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRERELEASE="--prerelease"; fi
+          # Release notes: this version's section of CHANGELOG.md ("## [x.y.z] ..."), else GitHub's generated notes
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [$VERSION]" 'index($0, heading) == 1 { found = 1; next } found && /^## \[/ { exit } found' CHANGELOG.md > notes.md
+          if [ -s notes.md ]; then NOTES=(--notes-file notes.md); else NOTES=(--generate-notes); fi
           gh release create "$GITHUB_REF_NAME" assets/* \
             --draft $PRERELEASE \
-            --title "A3D Manager $GITHUB_REF_NAME" \
-            --generate-notes
+            --title "A3D Manager Local $GITHUB_REF_NAME" \
+            "${NOTES[@]}"
