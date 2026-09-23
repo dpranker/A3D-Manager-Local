@@ -23,12 +23,18 @@ async function ensureLoaded(): Promise<void> {
   if (loaded) return;
 
   try {
-    const dbPath = path.join(process.cwd(), 'data', 'cart-database.json');
-    const content = await readFile(dbPath, 'utf-8');
-    const database = JSON.parse(content);
+    // cart-database.json isn't shipped in the repo; data/cart-names.json (the database the
+    // labels routes use, a plain array of entries) is the fallback
+    let carts: CartNameEntry[];
+    try {
+      const database = JSON.parse(await readFile(path.join(process.cwd(), 'data', 'cart-database.json'), 'utf-8'));
+      carts = database.carts || [];
+    } catch {
+      carts = JSON.parse(await readFile(path.join(process.cwd(), 'data', 'cart-names.json'), 'utf-8'));
+    }
     cartNameMap = new Map();
 
-    for (const cart of database.carts || []) {
+    for (const cart of carts) {
       cartNameMap.set(cart.id.toLowerCase(), cart);
     }
     loaded = true;
@@ -47,4 +53,13 @@ export async function lookupGameName(cartId: string): Promise<string | undefined
   await ensureLoaded();
   const entry = cartNameMap.get(cartId.toLowerCase());
   return entry?.name;
+}
+
+/**
+ * Whether the cart ID is in the app's cart database (the closest available proxy
+ * for the console's built-in database)
+ */
+export async function isKnownCart(cartId: string): Promise<boolean> {
+  await ensureLoaded();
+  return cartNameMap.has(cartId.toLowerCase());
 }
