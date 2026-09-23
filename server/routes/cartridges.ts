@@ -21,10 +21,11 @@ import {
   deleteLocalSettings,
   parseSettings,
   validateSettings,
+  getSDSettingsSupport,
+  LegacySettingsError,
   type CartridgeSettings,
 } from '../lib/cartridge-settings.js';
 
-import { lookupGameName } from '../lib/game-lookup.js';
 
 import {
   getGamePakInfo,
@@ -367,7 +368,8 @@ router.get('/:cartId/settings', async (req, res) => {
 
   try {
     const info = await getSettingsInfo(cartId, sdCardPath as string | undefined);
-    res.json(info);
+    const sdSupport = sdCardPath ? await getSDSettingsSupport(sdCardPath as string) : null;
+    res.json({ ...info, sdSupport });
   } catch (error) {
     console.error('Error getting settings:', error);
     res.status(500).json({ error: 'Failed to get settings' });
@@ -393,7 +395,9 @@ router.put('/:cartId/settings', async (req, res) => {
   }
 
   try {
-    const savedPath = await saveLocalSettings(cartId, settings);
+    // Optional hint for naming a new local game folder (settings.json has no title since 3Dos 1.5.1)
+    const title = typeof req.query.title === 'string' ? req.query.title : undefined;
+    const savedPath = await saveLocalSettings(cartId, settings, title);
     res.json({ success: true, path: savedPath });
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -476,38 +480,16 @@ router.post('/:cartId/settings/import', upload.single('settings'), async (req, r
 
   try {
     const content = req.file.buffer.toString('utf-8');
-    const settings = parseSettings(content);
-
-    const validation = validateSettings(settings);
-    if (!validation.valid) {
-      return res.status(400).json({ error: 'Invalid settings file', details: validation.errors });
-    }
-
-    // Preserve the target cartridge's title
-    // Priority: existing target title > system game name > imported title
-    let targetTitle = settings.title;
-
-    // First, try to get the target's existing settings title
+    let settings: CartridgeSettings;
     try {
-      const existingInfo = await getSettingsInfo(cartId);
-      if (existingInfo.local?.settings?.title &&
-          existingInfo.local.settings.title !== 'Unknown Cartridge') {
-        targetTitle = existingInfo.local.settings.title;
-      }
-    } catch {
-      // Ignore errors fetching existing settings
+      settings = parseSettings(content);
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof LegacySettingsError
+          ? 'This settings.json is in the format used before 3Dos 1.5.1, which the console no longer uses'
+          : error instanceof Error ? error.message : 'Invalid settings file',
+      });
     }
-
-    // If still "Unknown Cartridge" or same as imported, try the system game name
-    if (targetTitle === 'Unknown Cartridge' || targetTitle === settings.title) {
-      const systemName = await lookupGameName(cartId);
-      if (systemName && systemName !== 'Unknown Cartridge') {
-        targetTitle = systemName;
-      }
-    }
-
-    // Update the settings with the correct title
-    settings.title = targetTitle;
 
     const savedPath = await saveLocalSettings(cartId, settings);
     res.json({ success: true, path: savedPath });

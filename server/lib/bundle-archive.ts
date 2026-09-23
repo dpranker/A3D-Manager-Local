@@ -17,7 +17,7 @@ import { readFile, readdir, mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { Writable } from 'stream';
 import { getLabelsDbImage, updateLabelImage, addCartridge, getAllEntries, createEmptyLabelsDb } from './labels-db-core.js';
-import { findGameFolder } from './cartridge-settings.js';
+import { findGameFolder, ensureLocalGameFolder, normalizeSettings, serializeSettings, isLegacySettings } from './cartridge-settings.js';
 import {
   getAllBackupsForExport,
   importBackups,
@@ -74,7 +74,8 @@ export interface ImportResult {
   labelsImported: boolean;
   individualLabelsImported: { added: number; updated: number; skipped: number };
   ownershipMerged: { added: number; skipped: number };
-  settingsImported: { added: number; skipped: number; overwritten: number };
+  /** legacy: pre-3Dos 1.5.1 settings in the bundle, which are never imported */
+  settingsImported: { added: number; skipped: number; overwritten: number; legacy: number };
   gamePaksImported: { added: number; skipped: number; overwritten: number };
   gamePakBackupsImported: { added: number; skipped: number; merged: number };
   errors: string[];
@@ -388,7 +389,7 @@ export async function importBundle(
     labelsImported: false,
     individualLabelsImported: { added: 0, updated: 0, skipped: 0 },
     ownershipMerged: { added: 0, skipped: 0 },
-    settingsImported: { added: 0, skipped: 0, overwritten: 0 },
+    settingsImported: { added: 0, skipped: 0, overwritten: 0, legacy: 0 },
     gamePaksImported: { added: 0, skipped: 0, overwritten: 0 },
     gamePakBackupsImported: { added: 0, skipped: 0, merged: 0 },
     errors: [],
@@ -484,22 +485,26 @@ export async function importBundle(
       await mkdir(LOCAL_GAMES_DIR, { recursive: true });
 
       for (const [cartId, settingsObj] of bundle.settings) {
-        // Find existing game folder or create new one
-        let gameFolder = await findGameFolder(LOCAL_GAMES_DIR, cartId);
-        if (!gameFolder) {
-          // Create new folder for unknown cartridge
-          gameFolder = path.join(LOCAL_GAMES_DIR, `Unknown Cartridge ${cartId}`);
-          await mkdir(gameFolder, { recursive: true });
+        // Bundles made before 3Dos 1.5.1 carry the old format, which the console no longer uses
+        if (isLegacySettings(settingsObj)) {
+          result.settingsImported.legacy++;
+          continue;
+        }
+        const { settings, errors } = normalizeSettings(settingsObj);
+        if (!settings) {
+          result.errors.push(`Settings for ${cartId} skipped: ${errors[0]}`);
+          continue;
         }
 
+        const gameFolder = await ensureLocalGameFolder(cartId);
         const settingsPath = path.join(gameFolder, 'settings.json');
         const exists = existsSync(settingsPath);
 
         if (!exists) {
-          await writeFile(settingsPath, JSON.stringify(settingsObj, null, 2));
+          await writeFile(settingsPath, serializeSettings(settings));
           result.settingsImported.added++;
         } else if (options.mergeStrategy === 'overwrite') {
-          await writeFile(settingsPath, JSON.stringify(settingsObj, null, 2));
+          await writeFile(settingsPath, serializeSettings(settings));
           result.settingsImported.overwritten++;
         } else if (options.mergeStrategy === 'skip') {
           result.settingsImported.skipped++;
