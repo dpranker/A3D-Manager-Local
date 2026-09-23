@@ -9,9 +9,11 @@ export function HelpPage() {
         <section className="help-section">
           <h2>What is this?</h2>
           <p>
-            A3D Manager is an unofficial, community-created utility for managing custom label artwork
-            on your Analogue 3D (N64) SD card. It allows you to browse, edit, and sync cartridge labels
-            to the <code>labels.db</code> file that the Analogue 3D uses to display game artwork.
+            A3D Manager is an unofficial, community-created utility for managing your Analogue 3D (N64)
+            SD card. It lets you browse your cartridge collection and edit label artwork (the{' '}
+            <code>labels.db</code> file the console uses to display game artwork), per-game display and
+            hardware settings, and Controller Pak saves, then sync them to your SD card. It can also check
+            for 3D<sup>os</sup> firmware updates and copy them to the card.
           </p>
         </section>
 
@@ -62,50 +64,82 @@ export function HelpPage() {
             </a>.
           </p>
 
-          <h3>Limitations: Game Names</h3>
+          <h3>Game Names and Unknown Cartridges</h3>
           <p>
-            <strong>You cannot rename games through the SD card.</strong> The Analogue 3D determines
-            game titles using its internal firmware database. Renaming folders or editing{' '}
-            <code>settings.json</code> files has no effect on what the console displays.
+            <strong>Known games can't be renamed through the SD card.</strong> The Analogue 3D takes their
+            titles from its internal database, so renaming folders or editing <code>settings.json</code>{' '}
+            files has no effect on what the console displays.
           </p>
           <p>
-            Unknown cartridges (flash carts, homebrew, reproduction carts) will always appear as
-            "Unknown Cartridge" — but you <em>can</em> add custom artwork for them!
+            Unknown cartridges (flash carts, homebrew, reproduction carts) appear as "Unknown Cartridge".
+            Since 3D<sup>os</sup> 1.5.1 you can give them a title, developer, publisher, release year and
+            default settings with a <code>library.json</code> file in the game's folder (see{' '}
+            <a href="https://www.analogue.co/developer/docs/platform/library-json" target="_blank" rel="noopener noreferrer">
+              Analogue's library.json docs
+            </a>
+            ). A3D Manager can't edit <code>library.json</code> yet. You can add custom label artwork for
+            any cartridge, known or unknown.
           </p>
         </section>
 
         <section className="help-section">
           <h2>How to Use This Tool</h2>
 
-          <h3>1. Labels Database Tab</h3>
+          <h3>1. Connect Your SD Card</h3>
           <ul>
-            <li>Browse all labels currently in your local database</li>
-            <li>Search by game name or cartridge ID (hex code)</li>
-            <li>Click any label to edit it or upload custom artwork</li>
-            <li>Add new entries for unknown cartridges by clicking "Add Cartridge"</li>
+            <li>Insert your Analogue 3D SD card; the header shows "SD Card Connected" once it's detected</li>
+            <li>
+              In the desktop app, click "Choose SD Card…" in the header to pick the card (or the folder it's
+              mounted under). The web version finds it using the <code>SD_VOLUMES_PATH</code> setting
+            </li>
           </ul>
 
-          <h3>2. Uploading Custom Artwork</h3>
+          <h3>2. Browse Your Cartridges</h3>
           <ul>
-            <li>Click on a label to open the editor</li>
-            <li>Upload a PNG or JPG image — it will automatically be resized to 74×86 pixels</li>
-            <li>The image is converted to BGRA format and stored locally</li>
-            <li>Changes are saved to your local database (not your SD card yet)</li>
+            <li>The Cartridges page lists every cartridge in your local library</li>
+            <li>Search by game name or cartridge ID (hex code), and filter by region, language and video mode</li>
+            <li>Switch between All and Owned to focus on your own collection</li>
+            <li>Use "Import Owned from SD" to mark the cartridges on your SD card as owned</li>
+            <li>Use "Select" to act on several cartridges at once, e.g. pasting settings</li>
           </ul>
 
-          <h3>3. Sync to SD Card</h3>
+          <h3>3. Edit a Cartridge</h3>
           <ul>
-            <li>Select your SD card from the dropdown in the header</li>
-            <li>Go to the "Sync to SD" tab</li>
-            <li>Review the changes that will be written</li>
-            <li>Click "Sync to SD Card" to write <code>labels.db</code> to your SD card</li>
+            <li>
+              <strong>Label:</strong> upload a PNG or JPG. It's resized to 74×86 pixels, converted to the
+              console's format and saved locally
+            </li>
+            <li>
+              <strong>Settings:</strong> per-game display mode and hardware settings. Copy them from one
+              cartridge and paste them to others
+            </li>
+            <li>
+              <strong>Game Pak:</strong> manage the cartridge's virtual Controller Pak save and its backups
+            </li>
           </ul>
 
-          <h3>4. Settings</h3>
+          <h3>4. Sync to Your SD Card</h3>
           <ul>
-            <li>Configure where your local database is stored</li>
-            <li>Reset your local database if needed</li>
-            <li>Import existing <code>labels.db</code> files from your SD card or other sources</li>
+            <li>
+              Label changes stay on your computer until you click "Sync Now" next to the label status in the
+              header, which writes <code>labels.db</code> to your SD card
+            </li>
+            <li>Per-game settings are saved to the SD card automatically while it's connected</li>
+            <li>
+              Controller Pak saves are copied between your computer and the card from the Game Pak tab, which
+              also helps you choose when the two differ
+            </li>
+          </ul>
+
+          <h3>5. Settings Page</h3>
+          <ul>
+            <li>
+              <strong>Firmware:</strong> check for new 3D<sup>os</sup> releases, read the release notes and
+              copy the update to your SD card. The console installs it the next time it's powered on
+            </li>
+            <li><strong>Backup & Restore:</strong> export or import <code>.a3d</code> bundles of your data</li>
+            <li>Import a <code>labels.db</code> file, clear the image cache, or delete local or SD card data</li>
+            <li>"Show Advanced Settings" lets you add a cartridge manually by its ID</li>
           </ul>
         </section>
 
@@ -113,6 +147,10 @@ export function HelpPage() {
           <h2>Tips & Best Practices</h2>
           <ul>
             <li><strong>Always back up your SD card</strong> before syncing changes</li>
+            <li>
+              <strong>Eject the SD card in your file manager before removing it.</strong> Writes can still be
+              in progress after the app reports success, and pulling the card early can leave incomplete files
+            </li>
             <li>Test with one or two labels first before doing a full sync</li>
             <li>Use high-quality source images for best results</li>
             <li>The tool automatically handles image resizing and format conversion</li>
@@ -131,7 +169,19 @@ export function HelpPage() {
             <li><code>docs/LABELS_DB_SPECIFICATION.md</code> — Label database binary format</li>
             <li><code>docs/ANALOGUE_3D_SD_CARD_FORMAT.md</code> — Complete SD card structure</li>
             <li><code>docs/CART_ID_ALGORITHM.md</code> — How cartridge IDs are computed</li>
+            <li><code>docs/FIRMWARE_CHANGELOG.md</code> — Format changes across 3D<sup>os</sup> versions</li>
           </ul>
+          <p>
+            Analogue also documents the per-game files officially in its{' '}
+            <a href="https://www.analogue.co/developer/docs/platform" target="_blank" rel="noopener noreferrer">
+              platform docs
+            </a>{' '}
+            (<code>settings.json</code> and <code>library.json</code>) and publishes a{' '}
+            <a href="https://www.analogue.co/developer/docs/api" target="_blank" rel="noopener noreferrer">
+              firmware API
+            </a>
+            .
+          </p>
         </section>
 
         <section className="help-section">

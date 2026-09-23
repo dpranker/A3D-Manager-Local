@@ -3,6 +3,25 @@
 This document tracks discovered changes to the Analogue 3D's internal formats,
 SD card structure, and settings across firmware versions.
 
+## 3D OS 1.5.1
+
+Release Date: September 2026
+
+### SD Card Changes
+
+- 3D OS update files (`a3d_os_MM_mm_pp.bin`) are moved from the card root to
+  `/System/Archived/` after updating (from the release notes; not yet observed
+  on a card). Earlier versions left the update file in the root.
+- Library customization for Unknown Cartridges via per-game `library.json`
+  (see [Analogue's platform docs](https://www.analogue.co/developer/docs/platform/library-json)).
+- Analogue's platform docs, published alongside this release, describe a
+  snake_case `settings.json` format
+  ([schema](https://schemas.analogue.co/platform/3d/settings.json)) that differs
+  from the camelCase files written by 1.5.0 and earlier. Not yet confirmed on a
+  card running 1.5.1.
+
+---
+
 ## 3D OS 1.2.0
 
 Release Date: January 2026
