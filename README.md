@@ -152,6 +152,20 @@ npm run dev
 
 The app will open at `http://localhost:5173` with the backend API running on port 3001. Your SD card will be detected automatically and you can eject/re-insert it freely while the app runs.
 
+### Desktop App
+
+A3D Manager can also run as an Electron desktop app. The same Express server runs inside the app on `127.0.0.1` (random free port, local requests only), so there is no browser tab and nothing else to start.
+
+```bash
+npm run electron:dev     # Electron + Vite hot reload (main-process changes restart Electron)
+npm run electron:build   # Package for the current OS -> release/ (Linux: AppImage)
+```
+
+- **Choose SD Card…** in the header opens a native folder picker. Select the card itself (the folder containing `Library/N64`) or the folder it's mounted under (e.g. `/run/media/<user>`). The choice is remembered. Until you pick one, the app uses `SD_VOLUMES_PATH` if set, otherwise `/run/media/<user>` or `/media/<user>` on Linux and `/Volumes` on macOS.
+- **Data location:** `electron:dev` shares the repo's `.local/` with `npm run dev`. The packaged app stores its data in `~/.config/A3D Manager/workspace/` (Linux), `~/Library/Application Support/A3D Manager/workspace/` (macOS) or `%APPDATA%\A3D Manager\workspace\` (Windows).
+- Windows (`nsis`) and macOS (`dmg`) targets are configured in `electron-builder.yml` but need to be built on those platforms.
+- The Electron code lives in `electron/` (main process, preload, embedded server, build scripts) and `src/desktop/` (renderer bridge and picker button).
+
 ### Docker Installation
 
 A3D Manager can also run in Docker, though with some limitations around SD card handling:

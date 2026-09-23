@@ -3,6 +3,7 @@
 ## Decisions
 - Private standalone repo (GitHub forbids private forks of public repos); upstream tracked as a git remote.
 - Desktop shell: Electron, running the existing Express server in-process (keep sharp and fs-based SD card access).
+- sharp must stay >= 0.34: 0.33's prebuilt libvips exports its own GLib/GObject, which clashes with the system GLib Electron loads on Linux and aborts the main process (VIPS_IS_OBJECT assertion).
 
 ## Upstream architecture
 - Express server (server/index.ts, server/routes/, server/lib/sd-card.ts, etc.) + React/Vite client (src/). SD card is accessed via the filesystem.
@@ -16,6 +17,6 @@
 
 ## Status
 - [x] Push upstream history to origin
-- [ ] Electron wrapper
+- [x] Electron wrapper
 - [ ] Firmware checker
 - [ ] library.json editor
