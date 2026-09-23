@@ -95,7 +95,7 @@ For cartridges outside the console's built-in database (homebrew, flash carts, r
 
 ### Cartridge Colors
 
-The cartridge grid and previews show each cartridge in the color the console uses for it in its library: the per-game Cartridge Color setting, or the `library.json` default. Games without a local copy of their settings take the color from the connected SD card, where the console records it.
+The cartridge grid and previews show each cartridge in the color the console uses for it in its library: the per-game Cartridge Color setting, or the `library.json` default. Games without a local copy of their settings take the color from the connected SD card, where the console records it. Everything else shows its default retail shell color: the North American releases that shipped in black, red, blue, green, yellow or gold shells ([data/retail-colors.json](data/retail-colors.json)). Regional variants and later gray reprints aren't covered.
 
 ### 3Dos Firmware Updates
 
