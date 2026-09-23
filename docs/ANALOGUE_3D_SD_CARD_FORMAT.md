@@ -174,6 +174,8 @@ the update reset the settings they describe.
 
 ### library.db (Game Library Database)
 
+> **3D OS 1.5.1 changed this file's layout** (fixed-size stats table plus a second block with an alphabetical index); the structure below describes earlier versions. See [FIRMWARE_CHANGELOG.md](./FIRMWARE_CHANGELOG.md#3d-os-151).
+
 **Format**: Proprietary Analogue binary format
 **Size**: Variable (~16KB minimum, grows with entries)
 **Location**: `/Library/N64/library.db`
