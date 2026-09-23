@@ -54,6 +54,24 @@ interface LabelsStatus {
   fileSizeMB?: string;
 }
 
+const OWNED_FILTER_KEY = 'cartridgesOwnedFilter';
+
+function readRememberedOwnedFilter(): boolean {
+  try {
+    return localStorage.getItem(OWNED_FILTER_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function rememberOwnedFilter(owned: boolean): void {
+  try {
+    localStorage.setItem(OWNED_FILTER_KEY, String(owned));
+  } catch {
+    // Storage unavailable: the choice just isn't remembered
+  }
+}
+
 interface LabelsBrowserProps {
   onSelectLabel: (cartId: string, name?: string, shellColor?: string) => void;
   refreshKey?: number;
@@ -87,7 +105,10 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, colorsRefreshKey, sdC
   const [regionFilter, setRegionFilter] = useState<string>(searchParams.get('region') || '');
   const [languageFilter, setLanguageFilter] = useState<string>(searchParams.get('language') || '');
   const [videoModeFilter, setVideoModeFilter] = useState<string>(searchParams.get('videoMode') || '');
-  const [ownedFilter, setOwnedFilter] = useState<boolean>(searchParams.get('owned') === 'true');
+  // All/Owned: the URL wins when it says; otherwise restore the last choice
+  const [ownedFilter, setOwnedFilter] = useState<boolean>(() =>
+    searchParams.has('owned') ? searchParams.get('owned') === 'true' : readRememberedOwnedFilter(),
+  );
 
   // Modal states
   const [showImportModal, setShowImportModal] = useState(false);
@@ -273,7 +294,10 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, colorsRefreshKey, sdC
     if (type === 'region') setRegionFilter(value as string);
     if (type === 'language') setLanguageFilter(value as string);
     if (type === 'videoMode') setVideoModeFilter(value as string);
-    if (type === 'owned') setOwnedFilter(value as boolean);
+    if (type === 'owned') {
+      setOwnedFilter(value as boolean);
+      rememberOwnedFilter(value as boolean);
+    }
 
     updateURL(0, newFilters);
   };
