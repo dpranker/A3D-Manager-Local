@@ -400,6 +400,8 @@ export interface InstallResult {
   fileName: string;
   /** MD5 of the file as read back from the card */
   md5: string;
+  /** Older update files deleted from the card root */
+  removed: string[];
 }
 
 /**
@@ -427,8 +429,10 @@ async function syncToDisk(target: string): Promise<void> {
 /**
  * Copy the update file to the card root: written as .partial, verified, renamed,
  * and flushed to the card (file and directory) before reporting success, then
- * read back and compared with the download. Existing update files are left
- * alone: the console installs the highest version and archives old files itself.
+ * read back and compared with the download. Other update files in the root are
+ * then deleted, as Analogue's install guide asks: two update files in the root
+ * conflict. 3Dos 1.5.1+ moves the installed file to /System/Archived itself, so
+ * this only matters for older consoles; the archive is never touched.
  */
 export async function installFirmwareToSD(
   localPath: string,
@@ -453,10 +457,14 @@ export async function installFirmwareToSD(
     throw error;
   }
 
-  // Clear leftovers from earlier interrupted copies (only our own .partial files)
+  // Only once the new file is in place: remove other update files (they conflict) and
+  // leftovers from interrupted copies. Deleted outright; a file manager's trash stays on the card.
+  const removed: string[] = [];
   for (const name of await readdir(sdCardPath)) {
-    if (PARTIAL_FILE_PATTERN.test(name)) {
-      await unlink(path.join(sdCardPath, name)).catch(() => {});
+    const isOtherUpdate = versionFromFileName(name) !== null && name.toLowerCase() !== fileName;
+    if (isOtherUpdate || PARTIAL_FILE_PATTERN.test(name)) {
+      await unlink(path.join(sdCardPath, name));
+      if (isOtherUpdate) removed.push(name);
     }
   }
 
@@ -469,5 +477,5 @@ export async function installFirmwareToSD(
   if (cardMd5 !== downloadMd5) {
     throw new Error(`The update file on the SD card doesn't match the download (MD5 ${cardMd5} vs ${downloadMd5}). Run the update again.`);
   }
-  return { fileName, md5: cardMd5 };
+  return { fileName, md5: cardMd5, removed };
 }
