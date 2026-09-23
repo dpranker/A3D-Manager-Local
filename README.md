@@ -84,6 +84,14 @@ Seamless synchronization with your Analogue 3D:
 - **Conflict detection** with resolution options when local and SD card data differ
 - **Import games from SD** to discover cartridges you've played
 
+### Library Details for Unknown Cartridges
+
+For cartridges outside the console's built-in database (homebrew, flash carts, reproductions), the **Library** tab edits their `library.json` (3D<sup>os</sup> 1.5.1+): title, revision, developers, publishers, release year, players, regions, accessories, and the default settings they start with. The title also becomes the cartridge's name in A3D Manager.
+
+### Cartridge Colors
+
+The cartridge grid shows each cartridge in the color the console uses for it in its library (the per-game Cartridge Color setting, or the `library.json` default).
+
 ### 3Dos Firmware Updates
 
 Settings → Firmware uses Analogue's [firmware API](https://www.analogue.co/developer/docs/api) to check for new 3D<sup>os</sup> releases, shows the release notes, compares them with the update file on your SD card, and copies the new update to the card root (replacing any older update file there), verified against Analogue's published MD5 checksum. The console installs it the next time it's powered on.

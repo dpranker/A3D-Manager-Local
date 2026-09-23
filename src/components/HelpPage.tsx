@@ -77,8 +77,8 @@ export function HelpPage() {
             <a href="https://www.analogue.co/developer/docs/platform/library-json" target="_blank" rel="noopener noreferrer">
               Analogue's library.json docs
             </a>
-            ). A3D Manager can't edit <code>library.json</code> yet. You can add custom label artwork for
-            any cartridge, known or unknown.
+            ). In A3D Manager, open the cartridge and use its <strong>Library</strong> tab. You can add custom
+            label artwork for any cartridge, known or unknown.
           </p>
         </section>
 
@@ -110,8 +110,14 @@ export function HelpPage() {
               console's format and saved locally
             </li>
             <li>
-              <strong>Settings:</strong> per-game display mode and hardware settings. Copy them from one
-              cartridge and paste them to others
+              <strong>Settings:</strong> per-game display mode and hardware settings, and the cartridge color
+              the console uses in its library (also shown in the cartridge grid). Copy them from one cartridge
+              and paste them to others
+            </li>
+            <li>
+              <strong>Library</strong> (unknown cartridges only, 3D<sup>os</sup> 1.5.1+): title, developers,
+              publishers, release year, players, regions, accessories and default settings. The title also
+              becomes the cartridge's name in A3D Manager
             </li>
             <li>
               <strong>Game Pak:</strong> manage the cartridge's virtual Controller Pak save and its backups
