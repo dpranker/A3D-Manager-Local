@@ -4,7 +4,7 @@
 - Private standalone repo (GitHub forbids private forks of public repos); upstream tracked as a git remote.
 - Desktop shell: Electron, running the existing Express server in-process (keep sharp and fs-based SD card access).
 - Firmware releases come from the RSS feed https://www.analogue.co/feed/firmwares (all Analogue products; 3D items are titled "3D Firmware X.Y.Z", with pubDate and full release notes), not by scraping the support page. The feed has no download link or size: the download URL is the support page's /support/3d/firmware/X.Y.Z/download pattern (redirects to assets.analogue.co/firmware/<hash>/a3d_os_MM_mm_pp.bin), and size is checked against Content-Length.
-- Installed firmware detection: the only marker on the card is the a3d_os_MM_mm_pp.bin update file. Up to 1.5.0 the console leaves it in the card root after installing; 1.5.1+ moves it to /System/Archived (per release notes, not yet seen on a real card). Root file newer than the archive = pending.
+- Installed firmware detection: the only marker on the card is the a3d_os_MM_mm_pp.bin update file. Up to 1.5.0 the console leaves it in the card root after installing; 1.5.1+ moves it to /System/Archived (per release notes, not yet seen on a real card). Root file newer than the archive = pending. With several update files in the root, the console installs the highest version, so the app never deletes old ones.
 - sharp must stay >= 0.34: 0.33's prebuilt libvips exports its own GLib/GObject, which clashes with the system GLib Electron loads on Linux and aborts the main process (VIPS_IS_OBJECT assertion).
 
 ## Upstream architecture
