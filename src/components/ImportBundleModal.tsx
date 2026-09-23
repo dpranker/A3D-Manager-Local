@@ -19,7 +19,7 @@ interface ImportResult {
   success: boolean;
   labelsImported: boolean;
   ownershipMerged: { added: number; skipped: number };
-  settingsImported: { added: number; skipped: number; overwritten: number };
+  settingsImported: { added: number; skipped: number; overwritten: number; legacy?: number };
   gamePaksImported: { added: number; skipped: number; overwritten: number };
   gamePakBackupsImported: { added: number; skipped: number; merged: number };
   errors: string[];
@@ -222,6 +222,12 @@ export function ImportBundleModal({
                 Settings: {result.settingsImported.added} added
                 {result.settingsImported.overwritten > 0 && `, ${result.settingsImported.overwritten} updated`}
                 {result.settingsImported.skipped > 0 && `, ${result.settingsImported.skipped} skipped`}
+              </div>
+            )}
+            {(result.settingsImported.legacy ?? 0) > 0 && (
+              <div className="result-item">
+                Settings: {result.settingsImported.legacy} not imported because they use the format from before
+                3Dos 1.5.1, which the console no longer uses
               </div>
             )}
             {(result.gamePaksImported.added > 0 || result.gamePaksImported.skipped > 0 || result.gamePaksImported.overwritten > 0) && (
