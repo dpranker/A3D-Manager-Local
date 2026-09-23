@@ -1,0 +1,27 @@
+# Changelog
+
+All notable changes to A3D Manager Local. Each release's section is used as its GitHub release notes.
+
+## [0.1.0] - 2026-09-23
+
+First release of A3D Manager Local, a fork of [TheLeggett/A3D-Manager](https://github.com/TheLeggett/A3D-Manager). See the [README](https://github.com/dpranker/A3D-Manager-Local#readme) for the full feature list and install instructions.
+
+### Downloads
+
+- **Linux:** `A3D-Manager-Local-0.1.0-x86_64.AppImage`
+- **Windows:** `A3D-Manager-Local-0.1.0-x64.exe` (not code-signed; SmartScreen warns on first run)
+
+### New compared to upstream
+
+- **Desktop app** (Electron) with a native SD card picker, packaged as a Linux AppImage and a Windows installer. Upstream runs in a browser or Docker.
+- **3D<sup>os</sup> firmware updates:** check for new releases, read the release notes, and copy the update to the SD card, verified against Analogue's checksum.
+- **3D<sup>os</sup> 1.5.1 support:** reads and writes the new `settings.json` format, with the new options (Horizontal Upscaling, Overclock Off, Cartridge Color). Settings are only written to cards whose console is on 1.5.1 or later.
+- **Library tab** for unknown cartridges (homebrew, flash carts, reproductions): edits their `library.json` title, details and default settings.
+- **Cartridge colors:** the grid shows each cartridge in its console color, including default retail colors for carts that shipped in colored shells.
+- **Fixes:** per-game settings now auto-save (upstream's Settings tab never saved), and game-name lookups work.
+- **Other:** app icon, Earthworm Jim 3D added to the cart database, Node.js 22.12+ required to run from source.
+
+### Known issues
+
+- On Ubuntu 24.04 and later, start the AppImage with `--no-sandbox` if it doesn't open.
+- The dev version (`npm run electron:dev`) and the AppImage keep separate data folders.
