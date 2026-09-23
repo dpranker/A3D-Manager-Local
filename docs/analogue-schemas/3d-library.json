@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "default": "https://schemas.analogue.co/platform/3d/library.json",
+      "type": "string",
+      "format": "uri"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 127
+        },
+        "revision": {
+          "type": "number"
+        },
+        "player_count": {
+          "type": "number"
+        },
+        "accessories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "controller-pak",
+              "expansion-pak",
+              "rumble-pak",
+              "transfer-pak",
+              "voice-recognition-unit-usa",
+              "voice-recognition-system-japan",
+              "denshadego-controller",
+              "bio-sensor",
+              "tsurikon-64",
+              "n64-mouse"
+            ]
+          }
+        },
+        "region": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "asia",
+              "australia",
+              "brazil",
+              "germany",
+              "europe",
+              "france",
+              "england",
+              "italy",
+              "japan",
+              "netherlands",
+              "spain",
+              "usa"
+            ]
+          }
+        },
+        "developers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "publishers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "release_year": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "revision",
+        "player_count",
+        "accessories",
+        "region",
+        "developers",
+        "publishers",
+        "release_year"
+      ],
+      "additionalProperties": false
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "cart_color": {
+          "type": "string",
+          "enum": [
+            "gray",
+            "red",
+            "green",
+            "blue",
+            "yellow",
+            "gold",
+            "black",
+            "purple",
+            "rose"
+          ]
+        },
+        "disable_anti_aliasing": {
+          "type": "boolean"
+        },
+        "disable_deblur": {
+          "type": "boolean"
+        },
+        "disable_texture_filtering": {
+          "type": "boolean"
+        },
+        "enable_32_bit_color": {
+          "type": "boolean"
+        },
+        "force_original_hardware": {
+          "type": "boolean"
+        },
+        "force_progressive_output": {
+          "type": "boolean"
+        },
+        "horizontal_upscaling": {
+          "type": "boolean"
+        },
+        "overclock": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "enhanced",
+            "enhanced-plus",
+            "unleashed",
+            "off"
+          ]
+        },
+        "region": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ntsc",
+            "pal"
+          ]
+        },
+        "virtual_accessory": {
+          "type": "string",
+          "enum": [
+            "no-pak",
+            "controller-pak",
+            "rumble-pak"
+          ]
+        },
+        "virtual_expansion_pak": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cart_color",
+        "disable_anti_aliasing",
+        "disable_deblur",
+        "disable_texture_filtering",
+        "enable_32_bit_color",
+        "force_original_hardware",
+        "force_progressive_output",
+        "horizontal_upscaling",
+        "overclock",
+        "region",
+        "virtual_accessory",
+        "virtual_expansion_pak"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "$schema",
+    "data",
+    "defaults"
+  ],
+  "additionalProperties": false
+}

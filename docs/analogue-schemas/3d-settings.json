@@ -1,0 +1,401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "default": "https://schemas.analogue.co/platform/3d/settings.json",
+      "type": "string",
+      "format": "uri"
+    },
+    "display": {
+      "type": "object",
+      "properties": {
+        "odm": {
+          "type": "string",
+          "enum": [
+            "bvm",
+            "pvm",
+            "crt",
+            "scanlines",
+            "clean"
+          ]
+        },
+        "catalog": {
+          "type": "object",
+          "properties": {
+            "bvm": {
+              "type": "object",
+              "properties": {
+                "horizontal_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "vertical_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "enable_edge_overshoot": {
+                  "type": "boolean"
+                },
+                "enable_edge_hardness": {
+                  "type": "string",
+                  "enum": [
+                    "hard",
+                    "soft"
+                  ]
+                },
+                "image_fit": {
+                  "type": "string",
+                  "enum": [
+                    "original",
+                    "stretch",
+                    "cinema-zoom"
+                  ]
+                },
+                "image_size": {
+                  "type": "string",
+                  "enum": [
+                    "fill",
+                    "integer",
+                    "integer-plus"
+                  ]
+                }
+              },
+              "required": [
+                "horizontal_beam_convergence",
+                "vertical_beam_convergence",
+                "enable_edge_overshoot",
+                "enable_edge_hardness",
+                "image_fit",
+                "image_size"
+              ],
+              "additionalProperties": false
+            },
+            "pvm": {
+              "type": "object",
+              "properties": {
+                "horizontal_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "vertical_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "enable_edge_hardness": {
+                  "type": "string",
+                  "enum": [
+                    "hard",
+                    "soft"
+                  ]
+                },
+                "image_fit": {
+                  "type": "string",
+                  "enum": [
+                    "original",
+                    "stretch",
+                    "cinema-zoom"
+                  ]
+                },
+                "image_size": {
+                  "type": "string",
+                  "enum": [
+                    "fill",
+                    "integer",
+                    "integer-plus"
+                  ]
+                }
+              },
+              "required": [
+                "horizontal_beam_convergence",
+                "vertical_beam_convergence",
+                "enable_edge_hardness",
+                "image_fit",
+                "image_size"
+              ],
+              "additionalProperties": false
+            },
+            "crt": {
+              "type": "object",
+              "properties": {
+                "horizontal_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "vertical_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "enable_edge_hardness": {
+                  "type": "string",
+                  "enum": [
+                    "hard",
+                    "soft"
+                  ]
+                },
+                "image_fit": {
+                  "type": "string",
+                  "enum": [
+                    "original",
+                    "stretch",
+                    "cinema-zoom"
+                  ]
+                },
+                "image_size": {
+                  "type": "string",
+                  "enum": [
+                    "fill",
+                    "integer",
+                    "integer-plus"
+                  ]
+                }
+              },
+              "required": [
+                "horizontal_beam_convergence",
+                "vertical_beam_convergence",
+                "enable_edge_hardness",
+                "image_fit",
+                "image_size"
+              ],
+              "additionalProperties": false
+            },
+            "scanlines": {
+              "type": "object",
+              "properties": {
+                "horizontal_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "vertical_beam_convergence": {
+                  "type": "string",
+                  "enum": [
+                    "consumer",
+                    "professional",
+                    "off"
+                  ]
+                },
+                "enable_edge_hardness": {
+                  "type": "string",
+                  "enum": [
+                    "hard",
+                    "soft"
+                  ]
+                },
+                "image_fit": {
+                  "type": "string",
+                  "enum": [
+                    "original",
+                    "stretch",
+                    "cinema-zoom"
+                  ]
+                },
+                "image_size": {
+                  "type": "string",
+                  "enum": [
+                    "fill",
+                    "integer",
+                    "integer-plus"
+                  ]
+                }
+              },
+              "required": [
+                "horizontal_beam_convergence",
+                "vertical_beam_convergence",
+                "enable_edge_hardness",
+                "image_fit",
+                "image_size"
+              ],
+              "additionalProperties": false
+            },
+            "clean": {
+              "type": "object",
+              "properties": {
+                "interpolation_alg": {
+                  "type": "string",
+                  "enum": [
+                    "bc-spline",
+                    "bilinear",
+                    "blackman-harris",
+                    "lanczos2"
+                  ]
+                },
+                "gamma_transfer_function": {
+                  "type": "string",
+                  "enum": [
+                    "tube",
+                    "modern"
+                  ]
+                },
+                "sharpness": {
+                  "type": "string",
+                  "enum": [
+                    "very-soft",
+                    "soft",
+                    "medium",
+                    "sharp",
+                    "very-sharp"
+                  ]
+                },
+                "image_fit": {
+                  "type": "string",
+                  "enum": [
+                    "original",
+                    "stretch",
+                    "cinema-zoom"
+                  ]
+                },
+                "image_size": {
+                  "type": "string",
+                  "enum": [
+                    "fill",
+                    "integer",
+                    "integer-plus"
+                  ]
+                }
+              },
+              "required": [
+                "interpolation_alg",
+                "gamma_transfer_function",
+                "sharpness",
+                "image_fit",
+                "image_size"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "bvm",
+            "pvm",
+            "crt",
+            "scanlines",
+            "clean"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "odm",
+        "catalog"
+      ],
+      "additionalProperties": false
+    },
+    "library": {
+      "type": "object",
+      "properties": {
+        "cartridge_color": {
+          "type": "string",
+          "enum": [
+            "gray",
+            "red",
+            "green",
+            "blue",
+            "yellow",
+            "gold",
+            "black",
+            "purple",
+            "rose"
+          ]
+        }
+      },
+      "required": [
+        "cartridge_color"
+      ],
+      "additionalProperties": false
+    },
+    "hardware": {
+      "type": "object",
+      "properties": {
+        "disable_antialiasing": {
+          "type": "boolean"
+        },
+        "disable_deblur": {
+          "type": "boolean"
+        },
+        "disable_texture_filtering": {
+          "type": "boolean"
+        },
+        "enable_32_bit_color": {
+          "type": "boolean"
+        },
+        "force_original_hardware": {
+          "type": "boolean"
+        },
+        "force_progressive_output": {
+          "type": "boolean"
+        },
+        "horizontal_upscaling": {
+          "type": "boolean"
+        },
+        "overclock": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "enhanced",
+            "enhanced-plus",
+            "unleashed",
+            "off"
+          ]
+        },
+        "region": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ntsc",
+            "pal"
+          ]
+        },
+        "virtual_expansion_pak": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "disable_antialiasing",
+        "disable_deblur",
+        "disable_texture_filtering",
+        "enable_32_bit_color",
+        "force_original_hardware",
+        "force_progressive_output",
+        "horizontal_upscaling",
+        "overclock",
+        "region",
+        "virtual_expansion_pak"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "$schema",
+    "display",
+    "library",
+    "hardware"
+  ],
+  "additionalProperties": false
+}
