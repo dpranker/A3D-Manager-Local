@@ -18,7 +18,7 @@ const externalEmbeddedServer: Plugin = {
   name: 'external-embedded-server',
   setup(b) {
     b.onResolve({ filter: /^\.\/embedded-server\.js$/ }, (args) =>
-      args.importer.endsWith(path.join('electron', 'main.ts')) ? { path: args.path, external: true } : undefined,
+      args.importer.replace(/\\/g, '/').endsWith('electron/main.ts') ? { path: args.path, external: true } : undefined,
     );
   },
 };
@@ -57,14 +57,7 @@ export async function createBuildContexts(plugins: Plugin[] = []) {
   return Promise.all(buildOptions().map((o) => context({ ...o, plugins: [...(o.plugins ?? []), ...plugins] })));
 }
 
-async function main() {
+export async function buildOnce() {
   await rm(outDir, { recursive: true, force: true });
   await Promise.all(buildOptions().map((o) => build(o)));
-}
-
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  main().catch((error: unknown) => {
-    console.error(error);
-    process.exit(1);
-  });
 }
