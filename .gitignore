@@ -42,3 +42,6 @@ labels.db
 
 # Test output directories
 tests/*/output/
+# Electron desktop build output
+dist-electron/
+release/

@@ -1,0 +1,43 @@
+# Desktop packaging: npm run electron:build (builds for the current OS; Linux -> AppImage)
+appId: com.dpranker.a3dmanager
+productName: A3D Manager
+executableName: a3d-manager
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+directories:
+  output: release
+
+files:
+  - package.json
+  - dist/**/*
+  - dist-electron/**/*
+  - "!dist-electron/*.map"
+  # Runtime deps of web mode only (tsx runs `npm start`; React is bundled into dist/)
+  - "!node_modules/{tsx,esbuild,@esbuild,react,react-dom,react-router,react-router-dom}{,/**/*}"
+
+# Wayland app_id / WM_CLASS, so the window matches the generated .desktop entry
+extraMetadata:
+  desktopName: a3d-manager.desktop
+
+# Server reads data/ from its working directory; main.ts copies it to userData
+extraResources:
+  - from: data
+    to: data
+
+# sharp is a native module (Node-API, so no ABI-specific rebuild is needed, but
+# its .node binaries and libvips must live outside the asar archive)
+asarUnpack:
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
+
+linux:
+  target: AppImage
+  syncDesktopName: true
+  category: Utility
+
+win:
+  target: nsis
+
+mac:
+  target: dmg
+  category: public.app-category.utilities
