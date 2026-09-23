@@ -15,12 +15,26 @@ import {
   firmwareFileName,
   getSDFirmwareStatus,
   installFirmwareToSD,
-  parseFirmwareFeed,
+  parseFirmwareDetails,
+  parseFirmwareList,
+  parseReleaseNotes,
   versionFromFileName,
 } from '../../server/lib/firmware.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FEED_XML = readFileSync(path.join(__dirname, 'fixtures', 'feed.xml'), 'utf8');
+// Trimmed copies of https://www.analogue.co/support/3d/firmware/latest/details and .../list (2026-09-23)
+const DETAILS = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'details.json'), 'utf8'));
+const LIST = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'list.json'), 'utf8'));
+
+function expectRejected(details: Record<string, unknown>, label: string): void {
+  let threw = false;
+  try {
+    parseFirmwareDetails(details);
+  } catch {
+    threw = true;
+  }
+  assert(threw, `expected ${label} to be rejected`);
+}
 
 /** Temporary fake SD card with the given files (path -> size) */
 function makeCard(files: Record<string, number>): string {
@@ -71,20 +85,35 @@ export const firmwareSuite: TestSuite = {
     }),
 
     // =========================================================================
-    // Feed parsing
+    // Firmware API responses
     // =========================================================================
 
-    test('parseFirmwareFeed keeps only 3D releases, newest version first', () => {
-      const feed = parseFirmwareFeed(FEED_XML);
-      assertEqual(feed.releases.map((r) => r.version).join(','), '1.5.1,1.5.0');
-      const latest = feed.releases[0];
-      assertEqual(latest.publishedAt, '2026-09-23T15:12:32.000Z');
-      assertEqual(latest.downloadUrl, 'https://www.analogue.co/support/3d/firmware/1.5.1/download');
-      assertEqual(latest.releaseNotesUrl, 'https://www.analogue.co/support/3d/firmware/1.5.1');
+    test('parseFirmwareDetails maps the API response', () => {
+      const release = parseFirmwareDetails(DETAILS);
+      assertEqual(release.version, '1.5.1');
+      assertEqual(release.publishedAt, '2026-09-23T15:12:32.000Z');
+      assertEqual(release.md5, '75f14fd5e3961acff208d154e1ea8c9f');
+      assertEqual(release.fileName, 'a3d_os_01_05_01.bin');
+      assertEqual(release.downloadUrl, DETAILS.download_url);
+      assertEqual(release.releaseNotesUrl, 'https://www.analogue.co/support/3d/firmware/1.5.1');
+      assert(release.notes.length > 0, 'release notes parsed');
     }),
 
-    test('parseFirmwareFeed turns release notes into plain-text blocks', () => {
-      const notes = parseFirmwareFeed(FEED_XML).releases[0].notes;
+    test('parseFirmwareDetails rejects anything it should not download', () => {
+      expectRejected({ ...DETAILS, product: 'pocket' }, 'another product');
+      expectRejected({ ...DETAILS, md5: 'not-a-hash' }, 'a bad MD5');
+      expectRejected({ ...DETAILS, md5: undefined }, 'a missing MD5');
+      expectRejected({ ...DETAILS, file_name: 'a3d_os_01_05_00.bin' }, 'a file name for another version');
+      expectRejected({ ...DETAILS, download_url: 'https://example.com/a3d_os_01_05_01.bin' }, 'a non-Analogue download host');
+      expectRejected({ ...DETAILS, download_url: 'http://assets.analogue.co/firmware/x/a3d_os_01_05_01.bin' }, 'a plain-HTTP download');
+    }),
+
+    test('parseFirmwareList keeps 3D versions, newest first', () => {
+      assertEqual(parseFirmwareList(LIST).map((r) => r.version).join(','), '1.10.0,1.5.1,1.5.0');
+    }),
+
+    test('parseReleaseNotes turns release notes into plain-text blocks', () => {
+      const notes = parseReleaseNotes(DETAILS.release_notes_html);
       assertEqual(notes.map((b) => b.type).join(','), 'heading,list,heading,list,paragraph,list');
       const [general, generalList, , osList, note, footnotes] = notes;
       assert(general.type === 'heading' && general.text === 'General', 'first heading');
@@ -92,16 +121,6 @@ export const firmwareSuite: TestSuite = {
       assert(osList.type === 'list' && osList.items[1] === 'Fix: Issue with R&D <menu> toggles', 'entities decoded, no tags');
       assert(note.type === 'paragraph' && note.text.startsWith('Note:'), 'note paragraph');
       assert(footnotes.type === 'list' && footnotes.ordered && footnotes.items[0] === 'For more information visit the Platform docs', 'footnotes as ordered list');
-    }),
-
-    test('parseFirmwareFeed rejects a feed without 3D releases', () => {
-      let threw = false;
-      try {
-        parseFirmwareFeed('<rss><channel><item><title>Pocket Firmware 2.9</title></item></channel></rss>');
-      } catch {
-        threw = true;
-      }
-      assert(threw, 'expected an error');
     }),
 
     // =========================================================================

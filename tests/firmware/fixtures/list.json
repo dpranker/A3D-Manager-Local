@@ -1,0 +1,26 @@
+[
+  {
+    "version": "1.5.0",
+    "product": "3d",
+    "publishedAt": "2026-07-21T08:13:59-07:00",
+    "url": "https://www.analogue.co/support/3d/firmware/1.5.0"
+  },
+  {
+    "version": "1.5.1",
+    "product": "3d",
+    "publishedAt": "2026-09-23T08:12:32-07:00",
+    "url": "https://www.analogue.co/support/3d/firmware/1.5.1"
+  },
+  {
+    "version": "1.10.0",
+    "product": "3d",
+    "publishedAt": "2027-01-01T08:00:00-08:00",
+    "url": "https://www.analogue.co/support/3d/firmware/1.10.0"
+  },
+  {
+    "version": "2.9",
+    "product": "pocket",
+    "publishedAt": "2026-09-17T08:00:00-07:00",
+    "url": "https://www.analogue.co/support/pocket/firmware/2.9"
+  }
+]

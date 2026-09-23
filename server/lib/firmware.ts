@@ -1,8 +1,10 @@
 /**
  * 3Dos firmware: latest-release lookup, SD card detection, and download-to-SD.
  *
- * Releases come from Analogue's firmware RSS feed (all products; 3D items are
- * titled "3D Firmware X.Y.Z"). Analogue publishes no checksums.
+ * Releases come from Analogue's documented firmware API
+ * (https://www.analogue.co/developer/docs/api): /support/3d/firmware/list and
+ * /support/3d/firmware/{version|latest}/details, which include the file name,
+ * a direct download URL, the MD5 checksum and release notes.
  *
  * On the SD card the only version markers are the update files themselves
  * (a3d_os_MM_mm_pp.bin). Up to 3Dos 1.5.0 the console left the file in the card
@@ -17,11 +19,10 @@ import path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import type { ReadableStream as WebReadableStream } from 'stream/web';
-import { XMLParser } from 'fast-xml-parser';
 import { copyFileWithProgress, type ProgressCallback } from './file-transfer.js';
 
-export const FIRMWARE_FEED_URL = 'https://www.analogue.co/feed/firmwares';
 const SITE_ORIGIN = 'https://www.analogue.co';
+export const FIRMWARE_API_BASE = `${SITE_ORIGIN}/support/3d/firmware`;
 const INSTALL_GUIDE_URL = `${SITE_ORIGIN}/support/3d/guide/getting-started#updating-3dos`;
 const USER_AGENT = 'A3D-Manager';
 const LATEST_CACHE_MS = 60 * 60 * 1000;
@@ -33,7 +34,7 @@ const FIRMWARE_FILE_PATTERN = /^a3d_os_(\d{2})_(\d{2})_(\d{2})\.bin$/i;
 const PARTIAL_FILE_PATTERN = /^a3d_os_.*\.bin\.partial$/i;
 const LOCAL_FIRMWARE_DIR = path.join(process.cwd(), '.local', 'firmware');
 
-/** Release notes as plain-text blocks (the feed's HTML is never passed to the client) */
+/** Release notes as plain-text blocks (the API's HTML is never passed to the client) */
 export type ReleaseNotesBlock =
   | { type: 'heading'; text: string }
   | { type: 'paragraph'; text: string }
@@ -41,18 +42,22 @@ export type ReleaseNotesBlock =
 
 export interface FirmwareRelease {
   version: string;
-  /** ISO timestamp from the feed's pubDate */
+  /** ISO timestamp */
   publishedAt: string | null;
   downloadUrl: string;
   releaseNotesUrl: string;
   installGuideUrl: string;
   notes: ReleaseNotesBlock[];
+  /** Lowercase hex MD5 of the update file, as published by Analogue */
+  md5: string;
+  fileName: string;
+  /** Size label from the API, e.g. "22.3MB" */
+  fileSizeLabel: string | null;
 }
 
-export interface FirmwareFeed {
-  /** 3D releases, newest version first */
-  releases: FirmwareRelease[];
-  checkedAt: string;
+export interface FirmwareVersionSummary {
+  version: string;
+  publishedAt: string | null;
 }
 
 export interface SDFirmwareFile {
@@ -112,10 +117,12 @@ export function versionFromFileName(name: string): string | null {
 }
 
 // =============================================================================
-// Releases (RSS feed)
+// Releases (Analogue firmware API)
 // =============================================================================
 
-const FEED_TITLE_PATTERN = /^3D Firmware (\d+\.\d+\.\d+)$/;
+const MD5_PATTERN = /^[0-9a-f]{32}$/i;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
 const SUPERSCRIPT_DIGITS: Record<string, string> = {
   '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '.': '',
 };
@@ -156,55 +163,89 @@ export function parseReleaseNotes(html: string): ReleaseNotesBlock[] {
   return blocks;
 }
 
-interface FeedItem {
-  title?: string;
-  link?: string;
-  pubDate?: string;
-  'content:encoded'?: string;
+function isAnalogueHost(url: URL): boolean {
+  return url.protocol === 'https:' && (url.hostname === 'analogue.co' || url.hostname.endsWith('.analogue.co'));
 }
 
-export function parseFirmwareFeed(xml: string, checkedAt = new Date()): FirmwareFeed {
-  const parser = new XMLParser({ isArray: (name) => name === 'item' });
-  const items: FeedItem[] = parser.parse(xml)?.rss?.channel?.item ?? [];
-
-  const releases: FirmwareRelease[] = [];
-  for (const item of items) {
-    const version = FEED_TITLE_PATTERN.exec(String(item.title ?? '').trim())?.[1];
-    if (!version) continue; // other Analogue products
-    const published = item.pubDate ? new Date(item.pubDate) : null;
-    releases.push({
-      version,
-      publishedAt: published && !Number.isNaN(published.getTime()) ? published.toISOString() : null,
-      // Same pattern as the "Download" button on the support page (the feed has no download link)
-      downloadUrl: `${SITE_ORIGIN}/support/3d/firmware/${version}/download`,
-      releaseNotesUrl: `${SITE_ORIGIN}/support/3d/firmware/${version}`,
-      installGuideUrl: INSTALL_GUIDE_URL,
-      notes: parseReleaseNotes(String(item['content:encoded'] ?? '')),
-    });
-  }
-  if (releases.length === 0) {
-    throw new Error(`No 3D firmware releases found in ${FIRMWARE_FEED_URL} (the feed format may have changed)`);
-  }
-  releases.sort((a, b) => compareVersions(b.version, a.version));
-  return { releases, checkedAt: checkedAt.toISOString() };
+function isoOrNull(value: unknown): string | null {
+  const date = typeof value === 'string' ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
 }
 
-let feedCache: { feed: FirmwareFeed; fetchedAt: number } | null = null;
-
-export async function fetchFirmwareFeed(options: { force?: boolean } = {}): Promise<FirmwareFeed> {
-  if (!options.force && feedCache && Date.now() - feedCache.fetchedAt < LATEST_CACHE_MS) {
-    return feedCache.feed;
+/** Validate a /details response; anything unexpected is rejected rather than downloaded */
+export function parseFirmwareDetails(json: unknown): FirmwareRelease {
+  const d = (json ?? {}) as Record<string, unknown>;
+  const version = typeof d.version === 'string' ? d.version : '';
+  const problem =
+    d.product !== '3d' || !VERSION_PATTERN.test(version)
+      ? 'not a 3D firmware release'
+      : typeof d.md5 !== 'string' || !MD5_PATTERN.test(d.md5)
+        ? 'missing or invalid MD5 checksum'
+        : typeof d.file_name !== 'string' || d.file_name.toLowerCase() !== firmwareFileName(version)
+          ? `unexpected file name ${String(d.file_name)}`
+          : typeof d.download_url !== 'string' || !URL.canParse(d.download_url) || !isAnalogueHost(new URL(d.download_url))
+            ? `unexpected download URL ${String(d.download_url)}`
+            : null;
+  if (problem) {
+    throw new Error(`Unexpected response from Analogue's firmware API: ${problem}`);
   }
-  const response = await fetch(FIRMWARE_FEED_URL, {
-    headers: { 'User-Agent': USER_AGENT, Accept: 'application/rss+xml, application/xml' },
+  return {
+    version,
+    publishedAt: isoOrNull(d.published_at),
+    downloadUrl: d.download_url as string,
+    releaseNotesUrl: typeof d.url === 'string' && URL.canParse(d.url) ? d.url : `${FIRMWARE_API_BASE}/${version}`,
+    installGuideUrl: INSTALL_GUIDE_URL,
+    notes: parseReleaseNotes(typeof d.release_notes_html === 'string' ? d.release_notes_html : ''),
+    md5: (d.md5 as string).toLowerCase(),
+    fileName: d.file_name as string,
+    fileSizeLabel: typeof d.file_size === 'string' ? d.file_size : null,
+  };
+}
+
+/** /list response -> 3D versions, newest first */
+export function parseFirmwareList(json: unknown): FirmwareVersionSummary[] {
+  if (!Array.isArray(json)) throw new Error("Unexpected response from Analogue's firmware API: list is not an array");
+  return json
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .filter((item) => item.product === '3d' && typeof item.version === 'string' && VERSION_PATTERN.test(item.version))
+    .map((item) => ({ version: item.version as string, publishedAt: isoOrNull(item.publishedAt) }))
+    .sort((a, b) => compareVersions(b.version, a.version));
+}
+
+async function getJson(url: string): Promise<unknown> {
+  const response = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {
-    throw new Error(`Analogue firmware feed returned HTTP ${response.status}`);
+    throw new Error(`Analogue firmware API returned HTTP ${response.status} for ${url}`);
   }
-  const feed = parseFirmwareFeed(await response.text());
-  feedCache = { feed, fetchedAt: Date.now() };
-  return feed;
+  return response.json();
+}
+
+const apiCache = new Map<string, { value: unknown; fetchedAt: number }>();
+
+async function cachedJson(url: string, force: boolean): Promise<{ value: unknown; fetchedAt: number }> {
+  const hit = apiCache.get(url);
+  if (!force && hit && Date.now() - hit.fetchedAt < LATEST_CACHE_MS) return hit;
+  const entry = { value: await getJson(url), fetchedAt: Date.now() };
+  apiCache.set(url, entry);
+  return entry;
+}
+
+export async function fetchLatestFirmware(options: { force?: boolean } = {}): Promise<{ release: FirmwareRelease; checkedAt: string }> {
+  const { value, fetchedAt } = await cachedJson(`${FIRMWARE_API_BASE}/latest/details`, options.force ?? false);
+  return { release: parseFirmwareDetails(value), checkedAt: new Date(fetchedAt).toISOString() };
+}
+
+/** Details for every release newer than `version`, newest first (for a combined "what's new") */
+export async function fetchReleasesNewerThan(version: string, options: { force?: boolean } = {}): Promise<FirmwareRelease[]> {
+  const list = parseFirmwareList((await cachedJson(`${FIRMWARE_API_BASE}/list`, options.force ?? false)).value);
+  const newer = list.filter((r) => compareVersions(r.version, version) > 0).slice(0, 10);
+  const details = await Promise.all(
+    newer.map(async (r) => parseFirmwareDetails((await cachedJson(`${FIRMWARE_API_BASE}/${r.version}/details`, options.force ?? false)).value)),
+  );
+  return details;
 }
 
 // =============================================================================
@@ -264,16 +305,28 @@ export async function getSDFirmwareStatus(sdCardPath: string): Promise<SDFirmwar
 
 export type FirmwarePhase = 'download' | 'copy';
 
-function isAnalogueHost(url: URL): boolean {
-  return url.protocol === 'https:' && (url.hostname === 'analogue.co' || url.hostname.endsWith('.analogue.co'));
+async function fileHash(filePath: string, algorithm: 'md5'): Promise<string> {
+  const hash = createHash(algorithm);
+  await pipeline(createReadStream(filePath), hash);
+  return hash.digest('hex');
 }
 
 /**
- * Download the release into .local/firmware/, reusing an existing copy when its
- * size matches what the server reports. Returns the local file path.
+ * Download the release into .local/firmware/ and verify it against Analogue's
+ * published MD5. A cached copy is reused (without any network request) when its
+ * MD5 matches. Returns the local file path.
  */
 export async function downloadFirmware(release: FirmwareRelease, onProgress: ProgressCallback): Promise<string> {
   const expectedName = firmwareFileName(release.version);
+  await mkdir(LOCAL_FIRMWARE_DIR, { recursive: true });
+  const localPath = path.join(LOCAL_FIRMWARE_DIR, expectedName);
+
+  const cached = await stat(localPath).catch(() => null);
+  if (cached?.isFile() && (await fileHash(localPath, 'md5')) === release.md5) {
+    onProgress({ bytesWritten: cached.size, totalBytes: cached.size, percentage: 100, elapsedMs: 0, bytesPerSecond: 0, estimatedTimeRemainingMs: 0 });
+    return localPath;
+  }
+
   const response = await fetch(release.downloadUrl, {
     headers: { 'User-Agent': USER_AGENT },
     redirect: 'follow',
@@ -302,22 +355,14 @@ export async function downloadFirmware(release: FirmwareRelease, onProgress: Pro
     throw new Error(`Refusing firmware download: ${problem}`);
   }
 
-  await mkdir(LOCAL_FIRMWARE_DIR, { recursive: true });
-  const localPath = path.join(LOCAL_FIRMWARE_DIR, expectedName);
-
-  const existing = await stat(localPath).catch(() => null);
-  if (existing?.size === totalBytes) {
-    await response.body.cancel();
-    onProgress({ bytesWritten: totalBytes, totalBytes, percentage: 100, elapsedMs: 0, bytesPerSecond: 0, estimatedTimeRemainingMs: 0 });
-    return localPath;
-  }
-
   const partialPath = `${localPath}.partial`;
   const startTime = Date.now();
   let bytesWritten = 0;
   let lastEmit = 0;
+  const md5 = createHash('md5');
   const body = Readable.fromWeb(response.body as WebReadableStream<Uint8Array>);
   body.on('data', (chunk: Buffer) => {
+    md5.update(chunk);
     bytesWritten += chunk.length;
     const now = Date.now();
     if (now - lastEmit < 100 && bytesWritten < totalBytes) return;
@@ -339,6 +384,10 @@ export async function downloadFirmware(release: FirmwareRelease, onProgress: Pro
     if (bytesWritten !== totalBytes) {
       throw new Error(`Firmware download incomplete: got ${bytesWritten} of ${totalBytes} bytes`);
     }
+    const downloadedMd5 = md5.digest('hex');
+    if (downloadedMd5 !== release.md5) {
+      throw new Error(`Firmware download is corrupt: MD5 ${downloadedMd5} doesn't match Analogue's published ${release.md5}`);
+    }
     await rename(partialPath, localPath);
   } catch (error) {
     await unlink(partialPath).catch(() => {});
@@ -349,12 +398,8 @@ export async function downloadFirmware(release: FirmwareRelease, onProgress: Pro
 
 export interface InstallResult {
   fileName: string;
-}
-
-async function sha256(filePath: string): Promise<string> {
-  const hash = createHash('sha256');
-  await pipeline(createReadStream(filePath), hash);
-  return hash.digest('hex');
+  /** MD5 of the file as read back from the card */
+  md5: string;
 }
 
 /**
@@ -419,9 +464,10 @@ export async function installFirmwareToSD(
   await syncToDisk(destPath);
   await syncToDisk(sdCardPath);
 
-  const [cardHash, downloadHash] = await Promise.all([sha256(destPath), sha256(localPath)]);
-  if (cardHash !== downloadHash) {
-    throw new Error(`The update file on the SD card doesn't match the download (SHA-256 ${cardHash.slice(0, 12)}… vs ${downloadHash.slice(0, 12)}…). Run the update again.`);
+  // The download was already verified against Analogue's MD5, so a match here verifies the card copy too
+  const [cardMd5, downloadMd5] = await Promise.all([fileHash(destPath, 'md5'), fileHash(localPath, 'md5')]);
+  if (cardMd5 !== downloadMd5) {
+    throw new Error(`The update file on the SD card doesn't match the download (MD5 ${cardMd5} vs ${downloadMd5}). Run the update again.`);
   }
-  return { fileName };
+  return { fileName, md5: cardMd5 };
 }
