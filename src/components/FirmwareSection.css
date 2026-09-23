@@ -97,7 +97,40 @@
   color: var(--color-accent);
 }
 
-.firmware-trash-note {
+.firmware-file-note {
   margin-top: 1rem;
   padding: 0 1.5rem;
+}
+
+.firmware-check-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.firmware-check-label {
+  display: grid;
+}
+
+.firmware-check-label > span {
+  grid-area: 1 / 1;
+}
+
+.firmware-check--checking:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.firmware-check--checking .firmware-check-icon {
+  animation: firmware-check-spin 0.6s linear infinite;
+}
+
+@keyframes firmware-check-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .firmware-check--checking .firmware-check-icon {
+    animation: none;
+  }
 }
