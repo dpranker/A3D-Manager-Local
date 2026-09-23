@@ -2,7 +2,7 @@
 appId: com.dpranker.a3dmanager
 productName: A3D Manager
 executableName: a3d-manager
-artifactName: ${productName}-${version}-${arch}.${ext}
+artifactName: A3D-Manager-${version}-${arch}.${ext}
 
 directories:
   output: release

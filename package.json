@@ -16,7 +16,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "tsx electron/scripts/dev.ts",
-    "electron:compile": "tsc -p electron/tsconfig.json && tsx electron/scripts/build.ts",
+    "electron:compile": "tsc -p electron/tsconfig.json && tsx electron/scripts/compile.ts",
     "electron:rebuild": "electron-builder install-app-deps",
     "electron:build": "npm run build && npm run electron:compile && electron-builder"
   },
