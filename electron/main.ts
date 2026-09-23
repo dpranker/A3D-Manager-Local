@@ -81,6 +81,8 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     title: APP_NAME,
+    // Used for the window/taskbar icon on Linux and Windows (macOS uses the bundle icon)
+    icon: path.join(app.getAppPath(), 'electron', 'resources', 'icons', '256x256.png'),
     backgroundColor: '#000000',
     autoHideMenuBar: true,
     show: false,
