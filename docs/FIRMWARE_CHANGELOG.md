@@ -23,6 +23,22 @@ Observed on a real card after updating from 1.5.0 (2026-09-23):
   (30: 24 known games and 6 unknown cartridges). The 7 files left in the old
   camelCase format belonged to game folders not in `library.db` (orphaned
   folders the console no longer tracks).
+- For each newly added game the console writes a `settings.json` whose
+  `library.cartridge_color` is the cartridge's retail shell color (Armorines, a
+  black cart, got `"black"`); gray otherwise.
+- **library.db changed layout** (the header still says v1.0). Seen on a card
+  with 32 games (71,729 bytes; 17,012 bytes with 31 games before the update):
+  - `0x0000-0x10100`: the same header and 4096-slot cart ID table, followed by
+    a stats table sized for all 4096 slots (4096 × 12 bytes) instead of one
+    entry per game. Unused slots are mostly, but not entirely, `0xFF`.
+  - `0x10100-end` (5,937 bytes here): a second block with its own
+    `Analogue-Co` / `Analogue-3D.library` v1.0 header. At offset `0x1100` in
+    this block is a string of the library titles' first letters in
+    alphabetical order (e.g. `ABBBBCGHLMMMMNNNOSSSSTTVW`), probably the
+    alphabetical index the release notes mention. Not decoded further.
+  - A3D Manager only checks that `library.db` exists; it doesn't read or write
+    it, so the change doesn't affect the app. The format section in
+    ANALOGUE_3D_SD_CARD_FORMAT.md describes the layout before 1.5.1.
 - The console's converted files don't fully match Analogue's published schema:
   they include `enable_edge_overshoot` in the `pvm`, `crt` and `scanlines` modes,
   which the schema (with `additionalProperties: false`) only allows in `bvm`.
