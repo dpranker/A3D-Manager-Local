@@ -9,16 +9,24 @@ Release Date: September 2026
 
 ### SD Card Changes
 
+Observed on a real card after updating from 1.5.0 (2026-09-23):
+
 - 3D OS update files (`a3d_os_MM_mm_pp.bin`) are moved from the card root to
-  `/System/Archived/` after updating (from the release notes; not yet observed
-  on a card). Earlier versions left the update file in the root.
-- Library customization for Unknown Cartridges via per-game `library.json`
-  (see [Analogue's platform docs](https://www.analogue.co/developer/docs/platform/library-json)).
-- Analogue's platform docs, published alongside this release, describe a
-  snake_case `settings.json` format
-  ([schema](https://schemas.analogue.co/platform/3d/settings.json)) that differs
-  from the camelCase files written by 1.5.0 and earlier. Not yet confirmed on a
-  card running 1.5.1.
+  `/System/Archived/` after updating. 1.5.0 and earlier left the update file in
+  the root, and two update files in the root conflict, so older consoles need
+  the old one removed first.
+- **settings.json switched to a new format** matching Analogue's
+  [schema](https://schemas.analogue.co/platform/3d/settings.json): a `$schema`
+  key, snake_case keys and lowercase values (e.g.
+  `"horizontal_beam_convergence": "professional"`, `"enable_edge_hardness": "soft"`),
+  no `title` field. The update converted every cartridge listed in `library.db`
+  (30: 24 known games and 6 unknown cartridges). The 7 files left in the old
+  camelCase format belonged to game folders not in `library.db` (orphaned
+  folders the console no longer tracks).
+- The console created `library.json` files (library customization for Unknown
+  Cartridges, see [Analogue's platform docs](https://www.analogue.co/developer/docs/platform/library-json))
+  for the 6 unknown cartridges in `library.db`, with placeholder data (`"title": "Unknown Cartridge"`,
+  `"developers": ["Unknown"]`) and default settings.
 
 ---
 
