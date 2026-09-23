@@ -3,6 +3,8 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 0.25rem;
+  /* Sits between the SD card and label sync status rows, which have no spacing of their own */
+  margin: 0.5rem 0;
 }
 
 .desktop-sd-picker-button {
