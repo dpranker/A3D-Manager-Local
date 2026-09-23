@@ -19,7 +19,7 @@ First release of A3D Manager Local, a fork of [TheLeggett/A3D-Manager](https://g
 - **Library tab** for unknown cartridges (homebrew, flash carts, reproductions): edits their `library.json` title, details and default settings.
 - **Cartridge colors:** the grid shows each cartridge in its console color, including default retail colors for carts that shipped in colored shells.
 - **Fixes:** per-game settings now auto-save (upstream's Settings tab never saved), and game-name lookups work.
-- **Other:** app icon, Earthworm Jim 3D added to the cart database, Node.js 22.12+ required to run from source.
+- **Other:** app icon, the Cartridges page remembers your All/Owned choice, Earthworm Jim 3D added to the cart database, Node.js 22.12+ required to run from source.
 
 ### Coming next
 
