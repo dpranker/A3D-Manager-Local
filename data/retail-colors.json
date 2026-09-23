@@ -1,6 +1,6 @@
 {
   "_about": "Default retail shell colors for North American (USA) N64 releases that didn't ship in gray, keyed by cart ID. Used only for games the console hasn't recorded a color for: the console's own settings.json (local copy or SD card) always wins.",
-  "_source": "https://retrorecall.net/guides/n64-colored-cartridges/ (list of 42 NA colored cartridges, retrieved 2026-09-23), matched to USA entries in data/cart-names.json. Earthworm Jim 3D isn't in the cart database, so 41 entries.",
+  "_source": "https://retrorecall.net/guides/n64-colored-cartridges/ (list of 42 NA colored cartridges, retrieved 2026-09-23), matched to USA entries in data/cart-names.json. Earthworm Jim 3D's cart ID (68d163cf) was computed from a ROM with scripts/compute-a3d-id.ts and added to the cart database.",
   "_caveats": "PAL and Japanese releases used different shell colors and aren't covered. Titles also sold in gray (e.g. later Ocarina of Time prints) show the colored variant. The console's own table can differ: a USA Turok 3 on a real card recorded gray.",
   "colors": {
     "7f3a3558": "blue",
@@ -15,6 +15,7 @@
     "6dae3abb": "black",
     "89239b0e": "yellow",
     "7093d06a": "black",
+    "68d163cf": "yellow",
     "5218eb6c": "black",
     "ac5f19fa": "blue",
     "563b66fa": "red",

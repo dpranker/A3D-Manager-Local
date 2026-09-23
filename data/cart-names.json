@@ -947,6 +947,34 @@
     "revision": null
   },
   {
+    "id": "74e42a1e",
+    "gameCode": "NJMP",
+    "name": "Earthworm Jim 3D (Europe) (En,Fr,De,Es,It)",
+    "region": "Europe",
+    "languages": [
+      "English",
+      "French",
+      "German",
+      "Spanish",
+      "Italian"
+    ],
+    "videoMode": "PAL",
+    "releaseType": "official",
+    "revision": null
+  },
+  {
+    "id": "68d163cf",
+    "gameCode": "NJME",
+    "name": "Earthworm Jim 3D (USA)",
+    "region": "USA",
+    "languages": [
+      "English"
+    ],
+    "videoMode": "NTSC",
+    "releaseType": "official",
+    "revision": null
+  },
+  {
     "id": "7093d06a",
     "gameCode": "NWIE",
     "name": "ECW Hardcore Revolution (USA)",
