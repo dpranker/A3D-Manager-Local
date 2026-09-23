@@ -38,9 +38,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -72,7 +72,7 @@ jobs:
       - name: Smoke test packaged app
         run: ${{ matrix.smoke-prefix }} npx tsx electron/scripts/smoke-test.ts "${{ matrix.executable }}" ${{ matrix.smoke-args }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: a3d-manager-${{ matrix.name }}
           path: ${{ matrix.artifacts }}
@@ -85,7 +85,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: assets
           merge-multiple: true
