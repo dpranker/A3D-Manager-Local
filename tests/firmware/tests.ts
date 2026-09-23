@@ -109,14 +109,13 @@ export const firmwareSuite: TestSuite = {
     // =========================================================================
 
     test('older console: root update file is the installed version', withCard(
-      { 'a3d_os_01_05_00.bin': 10, '.Trash-1000/files/a3d_os_01_04_00.bin': 5 },
+      { 'a3d_os_01_05_00.bin': 10, '.Trash-1000/files/a3d_os_01_04_00.bin': 5, '.Trash-1000/files/a3d_os_01_05_01.bin.partial': 3 },
       async (card) => {
         const status = await getSDFirmwareStatus(card);
         assertEqual(status.installedVersion, '1.5.0');
         assertEqual(status.pendingVersion, null);
         assertEqual(status.consoleArchives, false);
-        assertEqual(status.trashedFiles.length, 1);
-        assertEqual(status.trashedFiles[0].size, 5);
+        assertEqual(status.trashedFiles.map((f) => f.size).sort().join(','), '3,5', 'trashed .bin and .partial both counted');
       },
     )),
 
@@ -137,6 +136,15 @@ export const firmwareSuite: TestSuite = {
         assertEqual(status.installedVersion, '1.5.1');
         assertEqual(status.pendingVersion, null);
         assertEqual(status.files.length, 0);
+      },
+    )),
+
+    test('interrupted copy: .partial file is reported, not counted as a version', withCard(
+      { 'a3d_os_01_05_00.bin': 10, 'a3d_os_01_05_01.bin.partial': 5 },
+      async (card) => {
+        const status = await getSDFirmwareStatus(card);
+        assertEqual(status.installedVersion, '1.5.0');
+        assertEqual(status.partialFiles.join(','), 'a3d_os_01_05_01.bin.partial');
       },
     )),
 

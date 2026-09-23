@@ -34,6 +34,7 @@ interface FirmwareStatus {
     installedVersion: string | null;
     pendingVersion: string | null;
     consoleArchives: boolean;
+    partialFiles: string[];
     trashedFiles: { path: string; size: number }[];
   } | null;
   sdCardError: string | null;
@@ -327,8 +328,8 @@ export function FirmwareSection() {
               3D<sup>os</sup> {install.version} is on your SD card
             </h3>
             <p className="setting-description">
-              Wrote <code>{install.fileName}</code> to the card root. Next: eject the card, put
-              it in your Analogue 3D and power on. The update starts automatically (yellow power LED, blinking
+              Wrote and verified <code>{install.fileName}</code> on the card. Next: eject the card in your
+              file manager before removing it, then put it in your Analogue 3D and power on. The update starts automatically (yellow power LED, blinking
               controller LEDs) and takes 3–6 minutes. Don't power off during the update.{' '}
               {latest && (
                 <a href={latest.installGuideUrl} target="_blank" rel="noopener noreferrer">
@@ -338,6 +339,16 @@ export function FirmwareSection() {
             </p>
           </div>
         </div>
+      )}
+
+      {sdCard && sdCard.partialFiles.length > 0 && !running && (
+        <p className="setting-description firmware-error firmware-trash-note">
+          Incomplete update file on the card: {sdCard.partialFiles.join(', ')}. An earlier copy didn't finish, usually
+          because the card was removed before it was ejected. The console ignores this file.{' '}
+          {status?.updateAvailable
+            ? 'Run Update SD Card again; it cleans this up.'
+            : 'You can delete it (not to the trash, or it stays on the card).'}
+        </p>
       )}
 
       {sdCard && sdCard.trashedFiles.length > 0 && (

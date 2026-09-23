@@ -10,8 +10,9 @@
  * file is "pending" when the archive has an older (or no newer) version, and the
  * archive's newest file is the installed version.
  */
-import { createWriteStream } from 'fs';
-import { mkdir, readdir, rename, stat, unlink } from 'fs/promises';
+import { createHash } from 'crypto';
+import { createReadStream, createWriteStream } from 'fs';
+import { mkdir, open, readdir, rename, stat, unlink } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
@@ -29,6 +30,7 @@ const MIN_FIRMWARE_BYTES = 5 * 1024 * 1024;
 const MAX_FIRMWARE_BYTES = 200 * 1024 * 1024;
 
 const FIRMWARE_FILE_PATTERN = /^a3d_os_(\d{2})_(\d{2})_(\d{2})\.bin$/i;
+const PARTIAL_FILE_PATTERN = /^a3d_os_.*\.bin\.partial$/i;
 const LOCAL_FIRMWARE_DIR = path.join(process.cwd(), '.local', 'firmware');
 
 /** Release notes as plain-text blocks (the feed's HTML is never passed to the client) */
@@ -74,6 +76,8 @@ export interface SDFirmwareStatus {
   pendingVersion: string | null;
   /** True when the card has an archive, so root files are known to be pending */
   consoleArchives: boolean;
+  /** Leftovers from an interrupted copy (e.g. card removed before writes were flushed) */
+  partialFiles: string[];
   /** Old update files left in a file manager's trash folder on the card (e.g. .Trash-1000) */
   trashedFiles: { path: string; size: number }[];
 }
@@ -236,15 +240,22 @@ export async function getSDFirmwareStatus(sdCardPath: string): Promise<SDFirmwar
     consoleArchives && newestRoot && (!newestArchived || compareVersions(newestRoot, newestArchived) > 0) ? newestRoot : null;
   const installedVersion = consoleArchives ? newestArchived : newestRoot;
 
+  const rootEntries = await readdir(sdCardPath, { withFileTypes: true });
+  const partialFiles = rootEntries.filter((e) => e.isFile() && PARTIAL_FILE_PATTERN.test(e.name)).map((e) => e.name);
+
   const trashedFiles: SDFirmwareStatus['trashedFiles'] = [];
-  for (const entry of await readdir(sdCardPath, { withFileTypes: true })) {
+  for (const entry of rootEntries) {
     if (!entry.isDirectory() || !/^\.Trash(-\d+)?$/.test(entry.name)) continue;
-    for (const file of await listUpdateFiles(path.join(sdCardPath, entry.name, 'files'))) {
-      trashedFiles.push({ path: path.join(entry.name, 'files', file.name), size: file.size });
+    const trashFilesDir = path.join(sdCardPath, entry.name, 'files');
+    const names = await readdir(trashFilesDir).catch(() => [] as string[]);
+    for (const name of names) {
+      if (!FIRMWARE_FILE_PATTERN.test(name) && !PARTIAL_FILE_PATTERN.test(name)) continue;
+      const info = await stat(path.join(trashFilesDir, name));
+      if (info.isFile()) trashedFiles.push({ path: path.join(entry.name, 'files', name), size: info.size });
     }
   }
 
-  return { files, archivedFiles, installedVersion, pendingVersion, consoleArchives, trashedFiles };
+  return { files, archivedFiles, installedVersion, pendingVersion, consoleArchives, partialFiles, trashedFiles };
 }
 
 // =============================================================================
@@ -340,10 +351,39 @@ export interface InstallResult {
   fileName: string;
 }
 
+async function sha256(filePath: string): Promise<string> {
+  const hash = createHash('sha256');
+  await pipeline(createReadStream(filePath), hash);
+  return hash.digest('hex');
+}
+
 /**
- * Copy the update file to the card root, written as .partial and renamed once
- * verified. Existing update files are left alone: the console archives them
- * itself (3Dos 1.5.1+ moves them to /System/Archived after updating).
+ * fsync a file or directory. On FAT a rename only changes the directory, which
+ * the kernel otherwise writes back up to ~30s later: a card removed in that
+ * window keeps the old name. Windows can't open directories for syncing (it
+ * writes removable-media metadata through immediately), so that case is skipped.
+ */
+async function syncToDisk(target: string): Promise<void> {
+  let handle;
+  try {
+    handle = await open(target, 'r');
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (process.platform === 'win32' && (code === 'EISDIR' || code === 'EPERM' || code === 'EACCES')) return;
+    throw error;
+  }
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Copy the update file to the card root: written as .partial, verified, renamed,
+ * and flushed to the card (file and directory) before reporting success, then
+ * read back and compared with the download. Existing update files are left
+ * alone: the console installs the highest version and archives old files itself.
  */
 export async function installFirmwareToSD(
   localPath: string,
@@ -370,9 +410,18 @@ export async function installFirmwareToSD(
 
   // Clear leftovers from earlier interrupted copies (only our own .partial files)
   for (const name of await readdir(sdCardPath)) {
-    if (/^a3d_os_.*\.bin\.partial$/i.test(name)) {
+    if (PARTIAL_FILE_PATTERN.test(name)) {
       await unlink(path.join(sdCardPath, name)).catch(() => {});
     }
+  }
+
+  // Make the new name (and the removals) durable on the card itself
+  await syncToDisk(destPath);
+  await syncToDisk(sdCardPath);
+
+  const [cardHash, downloadHash] = await Promise.all([sha256(destPath), sha256(localPath)]);
+  if (cardHash !== downloadHash) {
+    throw new Error(`The update file on the SD card doesn't match the download (SHA-256 ${cardHash.slice(0, 12)}… vs ${downloadHash.slice(0, 12)}…). Run the update again.`);
   }
   return { fileName };
 }
