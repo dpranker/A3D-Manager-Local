@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schemas.analogue.co/platform/3d/settings.json",
+  "display": {
+    "odm": "bvm",
+    "catalog": {
+      "bvm": {
+        "horizontal_beam_convergence": "professional",
+        "vertical_beam_convergence": "professional",
+        "enable_edge_overshoot": false,
+        "enable_edge_hardness": "soft",
+        "image_fit": "original",
+        "image_size": "fill"
+      },
+      "pvm": {
+        "horizontal_beam_convergence": "professional",
+        "vertical_beam_convergence": "professional",
+        "enable_edge_overshoot": true,
+        "enable_edge_hardness": "soft",
+        "image_fit": "original",
+        "image_size": "fill"
+      },
+      "crt": {
+        "horizontal_beam_convergence": "consumer",
+        "vertical_beam_convergence": "consumer",
+        "enable_edge_overshoot": true,
+        "enable_edge_hardness": "soft",
+        "image_fit": "original",
+        "image_size": "fill"
+      },
+      "scanlines": {
+        "horizontal_beam_convergence": "off",
+        "vertical_beam_convergence": "off",
+        "enable_edge_overshoot": false,
+        "enable_edge_hardness": "soft",
+        "image_fit": "original",
+        "image_size": "fill"
+      },
+      "clean": {
+        "interpolation_alg": "bc-spline",
+        "gamma_transfer_function": "tube",
+        "sharpness": "medium",
+        "image_fit": "original",
+        "image_size": "fill"
+      }
+    }
+  },
+  "library": {
+    "cartridge_color": "gray"
+  },
+  "hardware": {
+    "disable_antialiasing": false,
+    "disable_deblur": false,
+    "disable_texture_filtering": false,
+    "enable_32_bit_color": true,
+    "force_original_hardware": false,
+    "force_progressive_output": true,
+    "overclock": "auto",
+    "region": "auto",
+    "virtual_expansion_pak": true,
+    "horizontal_upscaling": true
+  }
+}
