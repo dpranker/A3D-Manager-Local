@@ -22,12 +22,14 @@
 
 ## settings.json format change (3Dos 1.5.1)
 - Confirmed on a real card (2026-09-23): the 1.5.1 update rewrote settings.json for every cartridge in library.db (known and unknown) in the new format from Analogue's schema (https://schemas.analogue.co/platform/3d/settings.json, copy in docs/analogue-schemas/3d-settings.json): "$schema" key, snake_case keys, lowercase values (e.g. "horizontal_beam_convergence": "professional", "enable_edge_hardness": "soft" instead of false, "image_size": "integer-plus"), a new "library": {"cartridge_color"} section, hardware.horizontal_upscaling, overclock "off", no "title". Only orphaned folders not in library.db kept the old camelCase / Title-case format.
-- Upstream's settings editor (server/lib/cartridge-settings.ts, src/lib/defaultSettings.ts, CartridgeDetailPanel Settings tab) only knows the old format. The docs say files that fail validation are reset to defaults at boot, so writing old-format settings to a 1.5.1 card is unsafe until this is fixed. It must read both formats and write the format the card uses (new for 1.5.1+). Details in docs/FIRMWARE_CHANGELOG.md.
+- Decision (2026-09-23): the app supports only the new format. Old-format files (local copies, bundles, orphaned folders on the card) are detected and reported but never converted, because the 1.5.1 update reset those settings anyway. Settings are only written to a card whose console uses the new format: any new-format settings.json on the card allows it; only old-format files block it (even if a 1.5.1 update file is waiting to be installed); with no settings files, the installed firmware version decides.
+- Files are written in the console's shape, not strictly the published schema: 3Dos 1.5.1 writes enable_edge_overshoot in pvm/crt/scanlines, which the schema (additionalProperties: false) doesn't allow. Every console-written file tested fails the published schema for that reason only; tests validate against the schema with that one field patched in.
+- Fixed along the way: upstream's Settings tab never auto-saved (a render loop kept resetting the save debounce, "Maximum update depth exceeded").
 
 ## Status
 - [x] Push upstream history to origin
 - [x] Electron wrapper
 - [x] Firmware checker
 - [ ] library.json editor (then update the Help page and README, see feature 3)
-- [ ] settings.json: support the 3Dos 1.5.1 format (read both, write the card's format; see "settings.json format change"). Until then, don't edit per-game settings with a 1.5.1 card connected
+- [x] settings.json: support the 3Dos 1.5.1 format (see "settings.json format change")
 - [ ] App icon (the app ships none, so desktops show a generic placeholder)

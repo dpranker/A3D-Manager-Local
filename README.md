@@ -29,6 +29,7 @@ Configure display settings individually for each cartridge:
 - **Display Mode**: BVM, PVM, CRT, Scanlines, or Clean
 - **CRT Mode Options**: Beam Convergence (Horizontal/Vertical), Edge Overshoot, Edge Hardness, Image Size, Image Fit
 - **Clean Mode Options**: Interpolation Algorithm, Gamma Transfer, Sharpness, Image Size, Image Fit
+- **Cartridge Color** shown in the console's library
 - **Copy & Paste Settings**: Copy settings from one cartridge and paste to multiple others in bulk using Selection Mode
 
 ![Edit Cartridge - Settings](src/assets/screenshots/Edit%20Cartridge%20-%20Settings.png)
@@ -41,12 +42,13 @@ Fine-tune hardware behavior for each game:
 - **Region Override**: Auto, NTSC, or PAL
 - **De-Blur** enhancement
 - **32-bit Color** mode
+- **Force Progressive Output** and **Horizontal Upscaling**
 - **Disable Texture Filtering** option
 - **Disable Antialiasing** option
 - **Force Original Hardware** mode
-- **Overclock**: Auto, Enhanced, Enhanced+, or Unleashed
+- **Overclock**: Off, Auto, Enhanced, Enhanced+, or Unleashed
 
-All settings changes sync automatically to your SD card when connected.
+Settings use the `settings.json` format introduced in 3D<sup>os</sup> 1.5.1. Changes sync automatically to your SD card when connected, as long as its console is on 1.5.1 or later; settings from older firmware are detected but not used, since the 1.5.1 update reset them.
 
 ### Game Pak Management
 
