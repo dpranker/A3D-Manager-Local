@@ -316,3 +316,5 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details. Based on [A3D Manager](https://github.com/TheLeggett/A3D-Manager) by TheLeggett and contributors, also MIT licensed; the original copyright notice is kept in the LICENSE file as the license requires.
+
+The additions in this fork were developed with the help of [Claude Code](https://claude.com/claude-code) (Anthropic's AI coding assistant); individual commits don't carry an AI co-author line.
