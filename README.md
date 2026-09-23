@@ -84,7 +84,7 @@ Seamless synchronization with your Analogue 3D:
 
 ### 3Dos Firmware Updates
 
-Settings → Firmware uses Analogue's [firmware API](https://www.analogue.co/developer/docs/api) to check for new 3D<sup>os</sup> releases, shows the release notes, compares them with the update file on your SD card, and copies the new update to the card root, verified against Analogue's published MD5 checksum. The console installs it the next time it's powered on.
+Settings → Firmware uses Analogue's [firmware API](https://www.analogue.co/developer/docs/api) to check for new 3D<sup>os</sup> releases, shows the release notes, compares them with the update file on your SD card, and copies the new update to the card root (replacing any older update file there), verified against Analogue's published MD5 checksum. The console installs it the next time it's powered on.
 
 ### Import & Export
 
