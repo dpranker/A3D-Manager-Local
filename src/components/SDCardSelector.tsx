@@ -3,6 +3,7 @@ import { useSDCard } from '../App';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { LabelSyncIndicator } from './LabelSyncIndicator';
 import { LabelSyncModal } from './LabelSyncModal';
+import { DesktopSDCardPicker } from '../desktop/DesktopSDCardPicker';
 import './SDCardSelector.css';
 
 export function SDCardSelector() {
@@ -18,6 +19,7 @@ export function SDCardSelector() {
         </span>
         <ConnectionIndicator connected={isConnected} />
       </div>
+      <DesktopSDCardPicker />
       <LabelSyncIndicator onSyncClick={() => setShowSyncModal(true)} />
       <LabelSyncModal
         isOpen={showSyncModal}

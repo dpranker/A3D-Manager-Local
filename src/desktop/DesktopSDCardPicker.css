@@ -1,0 +1,35 @@
+.desktop-sd-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.desktop-sd-picker-button {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.desktop-sd-picker-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.desktop-sd-picker-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.desktop-sd-picker-error {
+  max-width: 22rem;
+  color: var(--color-error);
+  font-size: 0.75rem;
+  text-align: right;
+}
