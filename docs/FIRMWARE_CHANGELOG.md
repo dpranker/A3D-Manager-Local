@@ -23,6 +23,9 @@ Observed on a real card after updating from 1.5.0 (2026-09-23):
   (30: 24 known games and 6 unknown cartridges). The 7 files left in the old
   camelCase format belonged to game folders not in `library.db` (orphaned
   folders the console no longer tracks).
+- The console's converted files don't fully match Analogue's published schema:
+  they include `enable_edge_overshoot` in the `pvm`, `crt` and `scanlines` modes,
+  which the schema (with `additionalProperties: false`) only allows in `bvm`.
 - The console created `library.json` files (library customization for Unknown
   Cartridges, see [Analogue's platform docs](https://www.analogue.co/developer/docs/platform/library-json))
   for the 6 unknown cartridges in `library.db`, with placeholder data (`"title": "Unknown Cartridge"`,
