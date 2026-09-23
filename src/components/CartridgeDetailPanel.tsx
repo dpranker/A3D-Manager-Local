@@ -34,6 +34,8 @@ import './CartridgeDetailPanel.css';
 interface CartridgeDetailPanelProps {
   cartId: string;
   gameName?: string;
+  /** Shell color from the console's cartridge color setting */
+  shellColor?: string;
   sdCardPath?: string;
   onClose: () => void;
   onUpdate: () => void;
@@ -116,6 +118,7 @@ type TabId = 'label' | 'settings' | 'gamepak' | 'library';
 export function CartridgeDetailPanel({
   cartId,
   gameName,
+  shellColor,
   sdCardPath,
   onClose,
   onUpdate,
@@ -206,6 +209,7 @@ export function CartridgeDetailPanel({
             alt={displayName}
             color="dark"
             size="small"
+            shellColor={shellColor}
           />
           <div className="slide-over-title">
             <h2>{displayName}</h2>
