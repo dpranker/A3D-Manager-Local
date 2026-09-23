@@ -12,6 +12,7 @@ import { CartridgesEmptyState } from './CartridgesEmptyState';
 import { useLabelSync } from './LabelSyncIndicator';
 import { TooltipIcon, Tooltip, Button } from './ui';
 import './LabelsBrowser.css';
+import { cartridgeShellColor } from '../lib/cartColors';
 
 interface LabelEntry {
   cartId: string;
@@ -54,12 +55,14 @@ interface LabelsStatus {
 }
 
 interface LabelsBrowserProps {
-  onSelectLabel: (cartId: string, name?: string) => void;
+  onSelectLabel: (cartId: string, name?: string, shellColor?: string) => void;
   refreshKey?: number;
+  /** Bump to re-read cartridge colors (e.g. after the detail panel closes) */
+  colorsRefreshKey?: number;
   sdCardPath?: string;
 }
 
-export function LabelsBrowser({ onSelectLabel, refreshKey, sdCardPath }: LabelsBrowserProps) {
+export function LabelsBrowser({ onSelectLabel, refreshKey, colorsRefreshKey, sdCardPath }: LabelsBrowserProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasLoadedRef = useRef(false);
   const { imageCacheBuster: globalCacheBuster } = useImageCache();
@@ -329,6 +332,15 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, sdCardPath }: LabelsB
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionFilter, languageFilter, videoModeFilter, searchQuery, ownedFilter, status?.imported]);
 
+  // Console cartridge colors (settings.json / library.json) for the locally stored games
+  const [cartColors, setCartColors] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch('/api/library/colors')
+      .then((r) => (r.ok ? r.json() : { colors: {} }))
+      .then((data: { colors: Record<string, string> }) => setCartColors(data.colors))
+      .catch(() => setCartColors({}));
+  }, [refreshKey, colorsRefreshKey, labelsRefreshKey]);
+
   // Refetch when refreshKey changes (after delete/update)
   useEffect(() => {
     if (refreshKey === undefined || refreshKey === 0) return;
@@ -587,6 +599,7 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, sdCardPath }: LabelsB
                     selectionMode={selectionMode}
                     isSelected={selectedCartIds.has(entry.cartId)}
                     imageCacheBuster={imageCacheBuster}
+                    shellColor={cartridgeShellColor(cartColors[entry.cartId.toLowerCase()])}
                     onClick={() => {
                       if (selectionMode) {
                         const newSelection = new Set(selectedCartIds);
@@ -597,7 +610,7 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, sdCardPath }: LabelsB
                         }
                         setSelectedCartIds(newSelection);
                       } else {
-                        onSelectLabel(entry.cartId, entry.name);
+                        onSelectLabel(entry.cartId, entry.name, cartridgeShellColor(cartColors[entry.cartId.toLowerCase()]));
                       }
                     }}
                   />

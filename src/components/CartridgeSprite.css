@@ -60,3 +60,9 @@
   height: 43px;
   top: 3.5px;
 }
+
+/* Shell tinted with the console's cartridge color (see CartridgeSprite shellColor) */
+.cartridge-sprite__overlay--tinted {
+  -webkit-mask: url('/n64-cart-dark.png') center / 100% 100% no-repeat;
+  mask: url('/n64-cart-dark.png') center / 100% 100% no-repeat;
+}

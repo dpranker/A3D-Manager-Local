@@ -11,7 +11,7 @@
  * players and 5 accessories) come from the docs page.
  */
 import { existsSync } from 'fs';
-import { mkdir, readFile, stat, writeFile } from 'fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import {
   CARTRIDGE_COLOR_VALUES,
@@ -21,6 +21,7 @@ import {
   findGameFolder,
   getLocalGamesDir,
   getSDSettingsSupport,
+  parseSettings,
   type CartridgeColor,
   type Overclock,
   type Region,
@@ -320,4 +321,36 @@ export async function downloadLibraryFromSD(cartId: string, sdCardPath: string):
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/**
+ * Cartridge color for every locally stored game: the per-game setting
+ * (settings.json library.cartridge_color) wins over the library.json default.
+ * Files in older formats are skipped. Keys are lowercase cart IDs.
+ */
+export async function getLocalCartridgeColors(): Promise<Record<string, CartridgeColor>> {
+  const colors: Record<string, CartridgeColor> = {};
+  const gamesDir = getLocalGamesDir();
+  for (const folder of await readdir(gamesDir).catch(() => [] as string[])) {
+    const cartId = /([0-9a-fA-F]{8})$/.exec(folder)?.[1]?.toLowerCase();
+    if (!cartId) continue;
+    const read = async (file: string) => readFile(path.join(gamesDir, folder, file), 'utf-8').catch(() => null);
+
+    const settingsText = await read('settings.json');
+    try {
+      if (settingsText) {
+        colors[cartId] = parseSettings(settingsText).library.cartridge_color;
+        continue;
+      }
+    } catch {
+      // Old-format or invalid settings: fall back to library.json
+    }
+    const libraryText = await read('library.json');
+    try {
+      if (libraryText) colors[cartId] = parseLibrary(libraryText).defaults.cart_color;
+    } catch {
+      // Invalid library.json: no color
+    }
+  }
+  return colors;
 }

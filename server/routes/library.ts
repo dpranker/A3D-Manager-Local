@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getSDSettingsSupport } from '../lib/cartridge-settings.js';
 import { isKnownCart } from '../lib/game-lookup.js';
-import { downloadLibraryFromSD, getLibraryInfo, saveLocalLibrary, uploadLibraryToSD } from '../lib/library-json.js';
+import { downloadLibraryFromSD, getLibraryInfo, getLocalCartridgeColors, saveLocalLibrary, uploadLibraryToSD } from '../lib/library-json.js';
 
 const router = Router();
 const CART_ID = /^[0-9a-fA-F]{8}$/;
@@ -14,6 +14,16 @@ const CART_ID = /^[0-9a-fA-F]{8}$/;
 async function isEditable(cartId: string, sdHasLibrary: boolean): Promise<boolean> {
   return sdHasLibrary || !(await isKnownCart(cartId));
 }
+
+// GET /api/library/colors - cartridge color (console setting) per locally stored game, for drawing the grid
+router.get('/colors', async (_req, res) => {
+  try {
+    res.json({ colors: await getLocalCartridgeColors() });
+  } catch (error) {
+    console.error('Error reading cartridge colors:', error);
+    res.status(500).json({ error: 'Failed to read cartridge colors' });
+  }
+});
 
 // GET /api/library/:cartId?sdCardPath=... - local and SD card library.json, plus whether it can be edited/synced
 router.get('/:cartId', async (req, res) => {

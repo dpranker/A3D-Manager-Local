@@ -13,6 +13,8 @@ interface CartridgeSpriteProps {
   color?: CartridgeSpriteColor;
   /** Size of the sprite */
   size?: CartridgeSpriteSize;
+  /** Tint the shell with this CSS color instead of `color` (the console's cartridge color setting) */
+  shellColor?: string;
   /** Optional className for additional styling */
   className?: string;
 }
@@ -25,6 +27,7 @@ export function CartridgeSprite({
   color = 'dark',
   size = 'large',
   className = '',
+  shellColor,
 }: CartridgeSpriteProps) {
   const [imgSrc, setImgSrc] = useState(artworkUrl);
   const overlayImage = color === 'black' ? '/n64-cart-black.png' : '/n64-cart-dark.png';
@@ -49,11 +52,19 @@ export function CartridgeSprite({
         loading="lazy"
         onError={handleError}
       />
-      <img
-        className="cartridge-sprite__overlay"
-        src={overlayImage}
-        alt=""
-      />
+      {shellColor ? (
+        // The shell sprites are a single flat color, so its shape works as a mask for any color
+        <span
+          className="cartridge-sprite__overlay cartridge-sprite__overlay--tinted"
+          style={{ backgroundColor: shellColor }}
+        />
+      ) : (
+        <img
+          className="cartridge-sprite__overlay"
+          src={overlayImage}
+          alt=""
+        />
+      )}
     </div>
   );
 }
