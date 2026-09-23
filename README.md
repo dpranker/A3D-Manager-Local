@@ -84,7 +84,7 @@ Seamless synchronization with your Analogue 3D:
 
 ### 3Dos Firmware Updates
 
-Settings → Firmware checks Analogue's firmware feed for new 3D<sup>os</sup> releases, shows the release notes, compares them with the update file on your SD card, and copies the new update to the card root (replacing the old one). The console installs it the next time it's powered on.
+Settings → Firmware checks Analogue's firmware feed for new 3D<sup>os</sup> releases, shows the release notes, compares them with the update file on your SD card, and copies the new update to the card root. The console installs it the next time it's powered on.
 
 ### Import & Export
 

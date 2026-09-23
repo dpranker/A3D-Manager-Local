@@ -11,7 +11,7 @@
 - Express server (server/index.ts, server/routes/, server/lib/sd-card.ts, etc.) + React/Vite client (src/). SD card is accessed via the filesystem.
 
 ## Features
-1. Firmware update check (done: Settings → Firmware). Latest as of 2026-09-23: 3Dos 1.5.1 (21,915,936 bytes). No checksums published. Compares against the version on the SD card and downloads the update to the card root, deleting older root update files.
+1. Firmware update check (done: Settings → Firmware). Latest as of 2026-09-23: 3Dos 1.5.1 (21,915,936 bytes). No checksums published. Compares against the version on the SD card and downloads the update to the card root. Existing update files are left alone (the console archives them).
 2. Electron desktop app (no browser/WebUSB).
 3. library.json editor: /Library/N64/Games/{Game Folder}/library.json, only for carts not in the built-in DB. Schema: https://schemas.analogue.co/platform/3d/library.json. Official docs: https://www.analogue.co/developer/docs/platform/library-json. Console support arrived in 3Dos 1.5.1 ("Library customization for Unknown Cartridges").
    - data: title (<=127), revision (num, 0-based), player_count (<=4), accessories[] (<=5), region[], developers[], release_year, publishers[] (optional)
