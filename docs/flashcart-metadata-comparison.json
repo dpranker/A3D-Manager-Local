@@ -1,0 +1,15 @@
+{
+  "source": "https://github.com/n64-tools/n64-flashcart-menu-metadata",
+  "commit": "47ef3efdde2171b66dacd9a26fcb35841fe987dc",
+  "matchedGameCodes": 305,
+  "missingAnalogueIds": [
+    {
+      "gameCode": "ZSAJ",
+      "name": "Vivid Dolls (Aleck64)"
+    },
+    {
+      "gameCode": "ZSEA",
+      "name": "Super Real Mahjong VS (Aleck64)."
+    }
+  ]
+}
