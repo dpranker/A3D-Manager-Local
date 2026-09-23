@@ -21,6 +21,14 @@ interface CartridgeSpriteProps {
 
 const PLACEHOLDER_URL = '/cart-placeholder.png';
 
+/** Shells too dark to see on the app's black background get an outline (in practice: black carts) */
+function isNearBlack(color: string | undefined): boolean {
+  const hex = color && /^#([0-9a-f]{6})$/i.exec(color)?.[1];
+  if (!hex) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return r + g + b < 3 * 0x20;
+}
+
 export function CartridgeSprite({
   artworkUrl,
   alt = 'Cartridge artwork',
@@ -44,7 +52,7 @@ export function CartridgeSprite({
   };
 
   return (
-    <div className={`cartridge-sprite cartridge-sprite--${size} ${className}`}>
+    <div className={`cartridge-sprite cartridge-sprite--${size} ${isNearBlack(shellColor) ? 'cartridge-sprite--outlined' : ''} ${className}`}>
       <img
         className="cartridge-sprite__artwork"
         src={imgSrc}

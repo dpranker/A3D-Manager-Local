@@ -66,3 +66,8 @@
   -webkit-mask: url('/n64-cart-dark.png') center / 100% 100% no-repeat;
   mask: url('/n64-cart-dark.png') center / 100% 100% no-repeat;
 }
+
+/* Near-black shells (black carts) would vanish on the black page: outline the silhouette */
+.cartridge-sprite--outlined {
+  filter: drop-shadow(1px 0 0 #3a3a3a) drop-shadow(-1px 0 0 #3a3a3a) drop-shadow(0 1px 0 #3a3a3a) drop-shadow(0 -1px 0 #3a3a3a);
+}

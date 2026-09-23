@@ -13,7 +13,7 @@ export const CARTRIDGE_COLOR_HEX: Record<CartridgeColor, string> = {
   blue: '#2556a6',
   yellow: '#e5b82e',
   gold: '#c49a2c',
-  black: '#161616',
+  black: '#0e0e0e',
   purple: '#5b3a9e',
   rose: '#d77a95',
 };
