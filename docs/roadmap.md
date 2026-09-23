@@ -32,6 +32,7 @@
 - Fixed along the way: upstream's Settings tab never auto-saved (a render loop kept resetting the save debounce, "Maximum update depth exceeded").
 
 ## Next
+- Add missing game IDs: data/cart-names.json has 343 games (community-contributed IDs), so many retail carts show as "Unknown Cartridge" (e.g. Neon Genesis Evangelion (Japan), 6758d3c4) and wrongly get the Library tab. Compute IDs from No-Intro ROM sets for every region with scripts/build-cart-name-db.ts / compute-a3d-id.ts; only IDs and names go into the repo, never ROM data.
 - Screenshot management (planned next): the console's screenshot folders on the SD card (Gallery/Screenshots/N64/<game>/, Gallery/4K Export/N64/, Memories/N64/<game>/ (all PNG files on a real card)). Not started.
 
 ## Status

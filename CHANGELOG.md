@@ -21,6 +21,11 @@ First release of A3D Manager Local, a fork of [TheLeggett/A3D-Manager](https://g
 - **Fixes:** per-game settings now auto-save (upstream's Settings tab never saved), and game-name lookups work.
 - **Other:** app icon, Earthworm Jim 3D added to the cart database, Node.js 22.12+ required to run from source.
 
+### Coming next
+
+- **Missing game IDs:** many retail games (especially Japanese releases) still show as "Unknown Cartridge"; the cart database will be expanded to cover nearly every release.
+- **Screenshot management** for the console's Gallery and Memories folders.
+
 ### Known issues
 
 - On Ubuntu 24.04 and later, start the AppImage with `--no-sandbox` if it doesn't open.
