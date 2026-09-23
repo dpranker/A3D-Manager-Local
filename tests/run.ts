@@ -17,6 +17,7 @@ import { bundleArchiveSuite, cleanOutput as cleanBundleOutput } from './bundle-a
 import { sdCardSuite } from './sd-card/tests.js';
 import { firmwareSuite } from './firmware/tests.js';
 import { libraryJsonSuite } from './library-json/tests.js';
+import { cartDatabaseSuite } from './cart-database/tests.js';
 
 const verbose = process.argv.includes('--verbose');
 
@@ -81,6 +82,7 @@ async function main() {
   allResults.push(...libraryJsonResults);
 
   // Print summary
+  allResults.push(...await runSuite(cartDatabaseSuite));
   printSummary(allResults);
 
   // Write test artifacts if verbose

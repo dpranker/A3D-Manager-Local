@@ -27,6 +27,9 @@ jobs:
       - name: Test
         run: npx tsx tests/run.ts
 
+      - name: Test ROM ID importer
+        run: python3 -m unittest discover -s tests/rom-cart-ids
+
       - name: Build
         run: npm run build
 

@@ -35,6 +35,7 @@ const router = Router();
 
 // Cart name database - enhanced format with metadata
 interface CartNameEntry {
+  flashcartName?: string;
   id: string;
   gameCode: string;
   name: string;
@@ -370,7 +371,8 @@ function applyFilters(
     // Search filter - matches name or cart ID
     if (filters.search) {
       const query = filters.search.toLowerCase();
-      const nameMatch = entry.name?.toLowerCase().includes(query);
+      const nameMatch = entry.name?.toLowerCase().includes(query)
+        || cartNameMap.get(entry.cartId.toLowerCase())?.flashcartName?.toLowerCase().includes(query);
       const idMatch = entry.cartId.toLowerCase().includes(query);
       // Also match entries without names when searching for "unknown" or "cartridge"
       const unknownMatch = !entry.name && 'unknown cartridge'.includes(query);
@@ -693,7 +695,8 @@ router.get('/search/:query', async (req, res) => {
       if (
         cart.id.toLowerCase().includes(query) ||
         cart.name.toLowerCase().includes(query) ||
-        cart.gameCode.toLowerCase().includes(query)
+        cart.gameCode.toLowerCase().includes(query) ||
+        cart.flashcartName?.toLowerCase().includes(query)
       ) {
         matches.push({
           cartId: cart.id,
