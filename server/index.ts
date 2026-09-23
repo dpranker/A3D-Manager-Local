@@ -10,7 +10,7 @@ import cartridgesRouter from './routes/cartridges.js';
 import sdCardRouter from './routes/sd-card.js';
 import localDataRouter from './routes/local-data.js';
 
-const app = express();
+export const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
@@ -18,7 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 // Ensure local directory structure exists
-async function ensureLocalDirs() {
+export async function ensureLocalDirs() {
   const localPath = path.join(process.cwd(), '.local', 'Library', 'N64');
   await mkdir(path.join(localPath, 'Games'), { recursive: true });
   await mkdir(path.join(localPath, 'Images'), { recursive: true });
@@ -59,4 +59,7 @@ async function start() {
   });
 }
 
-start().catch(console.error);
+// The Electron shell (electron/) imports this module and listens itself
+if (!process.env.A3D_EMBEDDED) {
+  start().catch(console.error);
+}

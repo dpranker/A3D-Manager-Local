@@ -1,0 +1,104 @@
+# Desktop release: push a tag like v1.2.0 (or v1.2.0-rc.1 for a pre-release).
+# Builds the Electron app on each OS (sharp's native binary is per-platform, so
+# no cross-building), smoke-tests the packaged app, then attaches the installers
+# to a *draft* GitHub release for review. The version comes from the tag.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            artifacts: release/*.AppImage
+            executable: release/linux-unpacked/a3d-manager
+            # chrome-sandbox isn't setuid in the unpacked dir, and Ubuntu 24.04
+            # restricts unprivileged user namespaces
+            smoke-prefix: xvfb-run -a
+            smoke-args: --no-sandbox
+          - name: Windows
+            os: windows-latest
+            artifacts: release/*.exe
+            executable: release/win-unpacked/a3d-manager.exe
+            smoke-prefix: ''
+            smoke-args: ''
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME is not v<semver>"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build client and Electron bundles
+        run: |
+          npm run build
+          npm run electron:compile
+
+      - name: Package
+        run: npx electron-builder --publish never -c.extraMetadata.version="$VERSION"
+
+      - name: Install virtual display
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Smoke test packaged app
+        run: ${{ matrix.smoke-prefix }} npx tsx electron/scripts/smoke-test.ts "${{ matrix.executable }}" ${{ matrix.smoke-args }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: a3d-manager-${{ matrix.name }}
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+
+  release:
+    name: Draft GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la assets
+          PRERELEASE=""
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRERELEASE="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --draft $PRERELEASE \
+            --title "A3D Manager $GITHUB_REF_NAME" \
+            --generate-notes

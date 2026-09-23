@@ -6,6 +6,7 @@
     "node": ">=20.19.0"
   },
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
@@ -13,7 +14,11 @@
     "build": "tsc -b && vite build",
     "start": "NODE_ENV=production node --import tsx server/index.ts",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "tsx electron/scripts/dev.ts",
+    "electron:compile": "tsc -p electron/tsconfig.json && tsx electron/scripts/compile.ts",
+    "electron:rebuild": "electron-builder install-app-deps",
+    "electron:build": "npm run build && npm run electron:compile && electron-builder"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
@@ -26,7 +31,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.11.0",
-    "sharp": "^0.33.5",
+    "sharp": "^0.34.5",
     "tsx": "^4.19.4"
   },
   "devDependencies": {
@@ -41,6 +46,9 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "concurrently": "^9.1.2",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.27.7",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

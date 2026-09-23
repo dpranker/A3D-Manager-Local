@@ -152,6 +152,21 @@ npm run dev
 
 The app will open at `http://localhost:5173` with the backend API running on port 3001. Your SD card will be detected automatically and you can eject/re-insert it freely while the app runs.
 
+### Desktop App
+
+A3D Manager can also run as an Electron desktop app. The same Express server runs inside the app on `127.0.0.1` (random free port, local requests only), so there is no browser tab and nothing else to start.
+
+```bash
+npm run electron:dev     # Electron + Vite hot reload (main-process changes restart Electron)
+npm run electron:build   # Package for the current OS -> release/ (Linux: AppImage)
+```
+
+- **Choose SD Card…** in the header opens a native folder picker. Select the card itself (the folder containing `Library/N64`) or the folder it's mounted under (e.g. `/run/media/<user>`). The choice is remembered. Until you pick one, the app uses `SD_VOLUMES_PATH` if set, otherwise `/run/media/<user>` or `/media/<user>` on Linux and `/Volumes` on macOS.
+- **Data location:** `electron:dev` shares the repo's `.local/` with `npm run dev`. The packaged app stores its data in `~/.config/A3D Manager/workspace/` (Linux), `~/Library/Application Support/A3D Manager/workspace/` (macOS) or `%APPDATA%\A3D Manager\workspace\` (Windows).
+- **Releases:** pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`. It builds the Linux AppImage and Windows installer on their own runners, smoke-tests both, and attaches them to a draft GitHub release for you to publish. The version comes from the tag. Builds are unsigned, so Windows SmartScreen will warn on first run.
+- The macOS (`dmg`) target is configured in `electron-builder.yml` but isn't built by the release workflow. Each platform must be built on that OS, because sharp's native binary is platform-specific.
+- The Electron code lives in `electron/` (main process, preload, embedded server, build scripts) and `src/desktop/` (renderer bridge and picker button).
+
 ### Docker Installation
 
 A3D Manager can also run in Docker, though with some limitations around SD card handling:
