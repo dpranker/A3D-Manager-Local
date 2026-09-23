@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schemas.analogue.co/platform/3d/library.json",
+  "data": {
+    "title": "Unknown Cartridge",
+    "revision": 0,
+    "player_count": 1,
+    "accessories": [],
+    "region": [],
+    "developers": ["Unknown"],
+    "publishers": ["Unknown"],
+    "release_year": 2026
+  },
+  "defaults": {
+    "virtual_expansion_pak": true,
+    "region": "auto",
+    "disable_deblur": false,
+    "enable_32_bit_color": false,
+    "force_progressive_output": false,
+    "disable_texture_filtering": false,
+    "disable_anti_aliasing": false,
+    "force_original_hardware": false,
+    "horizontal_upscaling": false,
+    "overclock": "off",
+    "virtual_accessory": "no-pak",
+    "cart_color": "gray"
+  }
+}
