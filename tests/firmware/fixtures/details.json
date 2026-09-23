@@ -1,0 +1,12 @@
+{
+  "url": "https://www.analogue.co/support/3d/firmware/1.5.1",
+  "product": "3d",
+  "version": "1.5.1",
+  "published_at": "2026-09-23T08:12:32-07:00",
+  "download_url": "https://assets.analogue.co/firmware/75f14fd5e3961acff208d154e1ea8c9f/a3d_os_01_05_01.bin",
+  "md5": "75f14fd5e3961acff208d154e1ea8c9f",
+  "file_name": "a3d_os_01_05_01.bin",
+  "file_size": "22.3MB",
+  "release_notes_html": "<h2>General</h2><ul><li><p>New: Overclocking and Force Original Hardware are now adjustable in-game <superscript>1</superscript></p></li></ul><h2>OS</h2><ul><li><p>Improved: 3DOS update files are moved to ‘/System/Archived’ on the SD card after updating</p></li><li><p>Fix: Issue with R&amp;D &lt;menu&gt; toggles</p></li></ul><p></p><p><em>Note: The last stage of this OS update may take longer than normal.</em></p><ol><li><p><em>For more information visit the </em><a href=\"https://www.analogue.co/developer/docs/platform/library-json\"><em>Platform docs</em></a></p></li></ol>",
+  "release_notes_markdown": "(trimmed)"
+}

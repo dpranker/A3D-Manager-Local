@@ -27,7 +27,7 @@ interface FirmwareStatus {
   latest: FirmwareRelease | null;
   newerReleases: FirmwareRelease[];
   checkedAt: string | null;
-  feedError: string | null;
+  latestError: string | null;
   sdCard: {
     files: SDFirmwareFile[];
     archivedFiles: SDFirmwareFile[];
@@ -54,7 +54,7 @@ type InstallState =
   | { step: 'idle' }
   | { step: 'confirm' }
   | { step: 'running'; progress: InstallProgress | null }
-  | { step: 'complete'; version: string; fileName: string }
+  | { step: 'complete'; version: string; fileName: string; md5: string }
   | { step: 'error'; message: string };
 
 function formatDate(iso: string | null): string {
@@ -114,7 +114,7 @@ export function FirmwareSection() {
           latest: null,
           newerReleases: [],
           checkedAt: null,
-          feedError: err instanceof Error ? err.message : String(err),
+          latestError: err instanceof Error ? err.message : String(err),
           sdCard: null,
           sdCardError: null,
           updateAvailable: false,
@@ -153,7 +153,7 @@ export function FirmwareSection() {
       } else if (data.type === 'complete') {
         finished = true;
         events.close();
-        setInstall({ step: 'complete', version: data.version, fileName: data.fileName });
+        setInstall({ step: 'complete', version: data.version, fileName: data.fileName, md5: data.md5 });
         checkStatus();
       } else if (data.type === 'error') {
         finished = true;
@@ -232,8 +232,8 @@ export function FirmwareSection() {
                 3D<sup>os</sup> {latest.version}
                 {latest.publishedAt && <> · released {formatDate(latest.publishedAt)}</>}
               </>
-            ) : status?.feedError ? (
-              `Couldn't check for updates: ${status.feedError}`
+            ) : status?.latestError ? (
+              `Couldn't check for updates: ${status.latestError}`
             ) : (
               'Checking…'
             )}
@@ -328,7 +328,8 @@ export function FirmwareSection() {
               3D<sup>os</sup> {install.version} is on your SD card
             </h3>
             <p className="setting-description">
-              Wrote and verified <code>{install.fileName}</code> on the card. Next: eject the card in your
+              Wrote <code>{install.fileName}</code> and verified it against Analogue's published checksum
+              (MD5 <code>{install.md5.slice(0, 12)}…</code>). Next: eject the card in your
               file manager before removing it, then put it in your Analogue 3D and power on. The update starts automatically (yellow power LED, blinking
               controller LEDs) and takes 3–6 minutes. Don't power off during the update.{' '}
               {latest && (

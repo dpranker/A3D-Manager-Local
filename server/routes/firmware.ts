@@ -2,7 +2,8 @@ import { Router, type Response } from 'express';
 import {
   compareVersions,
   downloadFirmware,
-  fetchFirmwareFeed,
+  fetchLatestFirmware,
+  fetchReleasesNewerThan,
   getSDFirmwareStatus,
   installFirmwareToSD,
   type FirmwarePhase,
@@ -20,14 +21,14 @@ function errorMessage(error: unknown): string {
 }
 
 // GET /api/firmware/status?sdCardPath=...&refresh=1
-// Latest 3Dos release (from Analogue's feed, cached for an hour) plus what's on the card.
+// Latest 3Dos release (Analogue's firmware API, cached for an hour) plus what's on the card.
 // Either half can fail independently (offline, no card) and is reported as null + error.
 router.get('/status', async (req, res) => {
   const sdCardPath = typeof req.query.sdCardPath === 'string' ? req.query.sdCardPath : '';
   const refresh = req.query.refresh === '1';
 
-  const [feedResult, sdResult] = await Promise.allSettled([
-    fetchFirmwareFeed({ force: refresh }),
+  const [latestResult, sdResult] = await Promise.allSettled([
+    fetchLatestFirmware({ force: refresh }),
     (async () => {
       if (!sdCardPath) return null;
       if (!(await isValidAnalogueDir(sdCardPath))) throw new Error('Not an Analogue 3D SD card');
@@ -35,21 +36,26 @@ router.get('/status', async (req, res) => {
     })(),
   ]);
 
-  const feed = feedResult.status === 'fulfilled' ? feedResult.value : null;
+  const latest = latestResult.status === 'fulfilled' ? latestResult.value.release : null;
   const sdCard = sdResult.status === 'fulfilled' ? sdResult.value : null;
-  const latest = feed?.releases[0] ?? null;
   // Compare against the pending file if one is waiting, so a copied update doesn't still read as "available"
   const onCard = sdCard ? (sdCard.pendingVersion ?? sdCard.installedVersion) : null;
+  const updateAvailable = Boolean(latest && onCard && compareVersions(latest.version, onCard) > 0);
+
+  // Every release newer than what's on the card, for a combined "what's new" list (best effort)
+  let newerReleases = latest ? [latest] : [];
+  if (updateAvailable && onCard) {
+    newerReleases = await fetchReleasesNewerThan(onCard, { force: refresh }).catch(() => newerReleases);
+  }
 
   res.json({
     latest,
-    // Every release newer than what's on the card, for a combined "what's new" list
-    newerReleases: feed && onCard ? feed.releases.filter((r) => compareVersions(r.version, onCard) > 0) : [],
-    checkedAt: feed?.checkedAt ?? null,
-    feedError: feedResult.status === 'rejected' ? errorMessage(feedResult.reason) : null,
+    newerReleases,
+    checkedAt: latestResult.status === 'fulfilled' ? latestResult.value.checkedAt : null,
+    latestError: latestResult.status === 'rejected' ? errorMessage(latestResult.reason) : null,
     sdCard,
     sdCardError: sdResult.status === 'rejected' ? errorMessage(sdResult.reason) : null,
-    updateAvailable: Boolean(latest && onCard && compareVersions(latest.version, onCard) > 0),
+    updateAvailable,
   });
 });
 
@@ -87,7 +93,7 @@ router.get('/install-stream', async (req, res: Response) => {
 
   try {
     // Always re-check right before downloading
-    const release = (await fetchFirmwareFeed({ force: true })).releases[0];
+    const { release } = await fetchLatestFirmware({ force: true });
     send({ type: 'start', version: release.version });
 
     const localPath = await downloadFirmware(release, (p) => send(progressEvent('download', p)));
