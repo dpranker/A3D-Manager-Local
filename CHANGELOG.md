@@ -2,7 +2,16 @@
 
 All notable changes to A3D Manager Local. Each release's section is used as its GitHub release notes.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-24
+
+Screenshots and Memories on the SD card, nearly every retail cartridge recognized, and a round of reliability fixes so interrupted transfers, quitting and failed saves can't lose data. A3D Manager Local is now a desktop app only.
+
+### Downloads
+
+- **Linux:** `A3D-Manager-Local-0.2.0-x86_64.AppImage`
+- **Windows:** `A3D-Manager-Local-0.2.0-x64.exe` (not code-signed; SmartScreen warns on first run)
+
+Your data carries over from 0.1.0.
 
 ### Added
 
@@ -12,10 +21,12 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **Screenshots tab** for each cartridge: browse the screenshots and 4K exports the console saved on the SD card, view them full size (at the console's 4:3 shape), save copies, and delete them.
 - **Memories tab** for each cartridge: lists the console's Memories (save states) with when they were made and on which 3D<sup>os</sup> version, and backs them up as the complete, unchanged files, one at a time or all at once as a zip. The app never changes or deletes Memories.
 - A **Custom** tag in the cartridge grid marks carts outside the built-in database (homebrew, flash carts, reproductions).
+- **Choosing which labels to keep shows what differs.** When both this computer and the SD card have labels, the sync dialog lists the cartridges whose labels differ or exist on only one side.
 
 ### Changed
 
 - The firmware check shows smoother feedback while checking.
+- The Help page explains how settings saves, Controller Pak backups and backup bundles work.
 
 ### Fixed
 
@@ -36,9 +47,6 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **Unticking Game Pak backups when exporting now leaves them out.**
 - **Bundles are checked before anything is imported:** cartridge IDs, the labels database, Controller Pak saves, library details and the unpacked size. Entries that fail are skipped and listed, instead of being written or failing the whole import.
 - **Controller Pak saves are backed up automatically before they're replaced**, locally or on the SD card (importing, restoring, downloading, uploading or a bundle import). The replaced save appears in the backup list as "Automatic: …", unless an identical backup already exists.
-- **Choosing which labels to keep shows what differs.** When both this computer and the SD card have labels, the sync dialog lists the cartridges whose labels differ or exist on only one side.
-- **The debug benchmark is gone from release builds.** It wrote test files to the SD card and was shown in Settings for everyone; it's now only in development builds.
-- **Browser and Docker mode only answer the app's own pages.** Other websites can't call the local server, and it only answers on `localhost`, IP addresses, or names listed in `A3D_ALLOWED_HOSTS`. The desktop app already worked this way.
 - If deleting orphaned folders fails partway through, the folders already deleted still come off the owned list.
 - The filter dropdown arrows no longer sit against the right edge.
 
@@ -46,6 +54,12 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 
 - **Browser and Docker versions.** A3D Manager is a desktop app only now: the Dockerfile, `docker-compose.yml`, `.env` settings and the `npm run dev` / `npm start` browser setup are gone. Development uses `npm run electron:dev`.
 - **Debug tools from upstream:** the Debug Benchmark, Chunk Size Benchmark and Labels Database Comparison under Advanced Settings (the sync dialog shows label differences), and the component test page.
+
+### Known issues
+
+- On Ubuntu 24.04 and later, start the AppImage with `--no-sandbox` if it doesn't open.
+- The dev version (`npm run electron:dev`) and the AppImage keep separate data folders.
+- HDR screenshots haven't been tested yet. They're shown and copied from the original file, but thumbnails may look different from the console.
 
 ## [0.1.0] - 2026-09-23
 
