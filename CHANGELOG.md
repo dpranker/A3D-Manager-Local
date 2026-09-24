@@ -9,6 +9,8 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **Many more games recognized:** the cartridge database grew from 343 to 936 IDs, covering nearly every retail release and revision in every region (including Japanese games such as Neon Genesis Evangelion). These games no longer show as "Unknown Cartridge" or get the Library tab.
 - **Alternate search names** from [n64-flashcart-menu-metadata](https://github.com/n64-tools/n64-flashcart-menu-metadata), so common alternate spellings of game titles also match in search.
 - **Clean up orphaned unknowns** (Settings → Cartridge List): finds "Unknown Cartridge" folders on the SD card that the console no longer tracks in its `library.db`, and deletes the ones you select.
+- **Screenshots tab** for each cartridge: browse the screenshots and 4K exports the console saved on the SD card, view them full size (at the console's 4:3 shape), save copies, and delete them.
+- **Memories tab** for each cartridge: lists the console's Memories (save states) with when they were made and on which 3D<sup>os</sup> version, and backs them up as the complete, unchanged files, one at a time or all at once as a zip. The app never changes or deletes Memories.
 - A **Custom** tag in the cartridge grid marks carts outside the built-in database (homebrew, flash carts, reproductions).
 
 ### Changed

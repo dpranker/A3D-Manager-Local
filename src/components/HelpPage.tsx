@@ -122,6 +122,14 @@ export function HelpPage() {
             <li>
               <strong>Game Pak:</strong> manage the cartridge's virtual Controller Pak save and its backups
             </li>
+            <li>
+              <strong>Screenshots:</strong> the screenshots and 4K exports the console saved for this cartridge on
+              the SD card. View them, save copies (exactly as the console wrote them) and delete them
+            </li>
+            <li>
+              <strong>Memories:</strong> the cartridge's Memories (save states) on the SD card. Back them up as the
+              complete file, or all at once as a zip; A3D Manager never changes or deletes them
+            </li>
           </ul>
 
           <h3>4. Sync to Your SD Card</h3>
