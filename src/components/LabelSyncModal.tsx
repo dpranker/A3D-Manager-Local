@@ -36,6 +36,71 @@ interface LabelSyncModalProps {
   onSyncComplete?: () => void;
 }
 
+interface LabelDiff {
+  identical: boolean;
+  onlyInLocal: string[];
+  onlyInOther: string[];
+  modified: string[];
+}
+
+const MAX_NAMED = 5;
+
+/** Which carts' labels differ, so the choice of side isn't made on entry counts alone */
+function LabelDifferences({ sdCardPath }: { sdCardPath: string }) {
+  const [diff, setDiff] = useState<LabelDiff | null>(null);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let current = true;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ sdCardPath });
+        const response = await fetch(`/api/labels/compare/detailed?${params}`);
+        if (!response.ok) throw new Error('compare failed');
+        const result = (await response.json()) as LabelDiff;
+        if (!current) return;
+        setDiff(result);
+        const ids = [result.modified, result.onlyInLocal, result.onlyInOther].flatMap((list) => list.slice(0, MAX_NAMED));
+        const found = await Promise.all(
+          ids.map(async (id) => {
+            const lookup = await fetch(`/api/labels/lookup/${id}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+            return [id, lookup?.name || id] as const;
+          }),
+        );
+        if (current) setNames(Object.fromEntries(found));
+      } catch {
+        if (current) setFailed(true);
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [sdCardPath]);
+
+  if (failed) return null;
+  if (!diff) return <p className="sync-differences-loading">Comparing labels…</p>;
+  if (diff.identical) return <p className="sync-differences">Both have the same labels.</p>;
+
+  const row = (count: number, label: string, ids: string[]) =>
+    count > 0 && (
+      <li>
+        <strong>{count}</strong> {label}
+        {': '}
+        {ids.slice(0, MAX_NAMED).map((id) => names[id] ?? id).join(', ')}
+        {count > MAX_NAMED && `, and ${count - MAX_NAMED} more`}
+      </li>
+    );
+
+  return (
+    <ul className="sync-differences">
+      {row(diff.modified.length, 'different on each', diff.modified)}
+      {row(diff.onlyInLocal.length, 'only on this computer', diff.onlyInLocal)}
+      {row(diff.onlyInOther.length, 'only on the SD card', diff.onlyInOther)}
+    </ul>
+  );
+}
+
 export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncModalProps) {
   const { selectedSDCard } = useSDCard();
   const { checkSyncStatus, triggerLabelsRefresh } = useLabelSync();
@@ -298,6 +363,7 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
                   <p className="sync-description">
                     Both your local machine and SD card have labels. Choose which version to keep:
                   </p>
+                  {selectedSDCard && <LabelDifferences sdCardPath={selectedSDCard.path} />}
                   <div className="sync-direction-options">
                     <button
                       className="sync-direction-btn"

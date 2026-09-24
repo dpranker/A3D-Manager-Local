@@ -196,3 +196,22 @@
   color: var(--color-error);
   margin: 0;
 }
+
+/* Which carts' labels differ between this computer and the card */
+.sync-differences,
+.sync-differences-loading {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.sync-differences {
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sync-differences strong {
+  color: var(--color-text);
+}
