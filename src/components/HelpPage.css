@@ -53,6 +53,35 @@
   color: #d0d0d0;
 }
 
+.help-save-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.help-save-table caption {
+  text-align: left;
+  margin-bottom: 0.75rem;
+  color: #d0d0d0;
+}
+
+.help-save-table th,
+.help-save-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #444;
+  text-align: left;
+  vertical-align: top;
+}
+
+.help-save-table th {
+  color: #fff;
+}
+
+.help-save-table th[scope='row'] {
+  width: 25%;
+}
+
 .help-section code {
   background: var(--color-surface-elevated);
   padding: 0.2rem 0.4rem;
