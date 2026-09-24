@@ -93,6 +93,14 @@ For cartridges outside the console's built-in database (homebrew, flash carts, r
 
 ![Edit Cartridge - Library](src/assets/screenshots/Edit%20Cartridge%20-%20Library.png)
 
+### Screenshots
+
+The **Screenshots** tab shows the screenshots (`Gallery/Screenshots`) and 4K exports (`Gallery/4K Export`) the console saved for a cartridge on the SD card. Open one full size, save a copy (the original file, untouched), or delete it.
+
+### Memories
+
+The **Memories** tab lists a cartridge's Memories (`Memories`), the console's save states, with when each was made and on which 3D<sup>os</sup> version. **Back Up** saves the complete file, save state included, and **Back Up All** saves all of a cartridge's Memories as one zip. A3D Manager never changes or deletes Memories.
+
 ### Cartridge Colors
 
 The cartridge grid and previews show each cartridge in the color the console uses for it in its library: the per-game Cartridge Color setting, or the `library.json` default. Games without a local copy of their settings take the color from the connected SD card, where the console records it. Everything else shows its default retail shell color: the North American releases that shipped in black, red, blue, green, yellow or gold shells ([data/retail-colors.json](data/retail-colors.json)). Regional variants and later gray reprints aren't covered.

@@ -11,6 +11,7 @@ import sdCardRouter from './routes/sd-card.js';
 import localDataRouter from './routes/local-data.js';
 import firmwareRouter from './routes/firmware.js';
 import libraryRouter from './routes/library.js';
+import screenshotsRouter from './routes/screenshots.js';
 
 export const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +35,7 @@ app.use('/api/sd-card', sdCardRouter);
 app.use('/api/local-data', localDataRouter);
 app.use('/api/firmware', firmwareRouter);
 app.use('/api/library', libraryRouter);
+app.use('/api/screenshots', screenshotsRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

@@ -4,6 +4,8 @@ import './CartridgeCard.css';
 interface CartridgeCardProps {
   cartId: string;
   name?: string;
+  /** Not in the built-in cart database; shows a Custom tag */
+  custom?: boolean;
   gridIndex: number;
   hasLabel: boolean;
   selectionMode: boolean;
@@ -17,6 +19,7 @@ interface CartridgeCardProps {
 export function CartridgeCard({
   cartId,
   name,
+  custom,
   gridIndex,
   hasLabel,
   selectionMode,
@@ -36,6 +39,7 @@ export function CartridgeCard({
       onClick={onClick}
     >
       {selectionMode && <div className="selection-checkbox" />}
+      {custom && <span className="cartridge-card-custom">Custom</span>}
       <div className="cart-sprite-wrapper">
         <CartridgeSprite
           artworkUrl={imageUrl}
