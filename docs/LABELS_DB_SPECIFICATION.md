@@ -342,11 +342,11 @@ Image Slot Structure (25,600 bytes each):
 
 ## SD Card Transfer Performance
 
-When writing `labels.db` to an SD card, transfer performance varies significantly based on chunk size and sync behavior. A3D Manager includes a **Chunk Size Benchmark** on the Settings page to test your specific SD card.
+When writing `labels.db` to an SD card, transfer performance varies significantly based on chunk size and sync behavior.
 
 ### Benchmark Results
 
-Testing on a typical SD card showed:
+Measured with the chunk size benchmark that earlier versions of the app included, on a typical SD card:
 
 | Configuration | Avg Speed | Duration (22MB) |
 |--------------|-----------|-----------------|
@@ -364,17 +364,7 @@ Testing on a typical SD card showed:
 
 ### Configuration
 
-Transfer settings can be configured via environment variables in `.env`:
-
-```bash
-# Chunk size in bytes (default: 2097152 = 2MB)
-TRANSFER_CHUNK_SIZE=2097152
-
-# Whether to fsync after each chunk (default: true)
-# true = accurate progress bar (recommended)
-# false = ~5% faster but progress won't reflect actual disk writes
-TRANSFER_FSYNC_PER_CHUNK=true
-```
+A3D Manager writes in 2MB chunks and syncs after each one (`server/lib/file-transfer.ts`), so the progress bar reflects what's actually on the card, at about 5% below the fastest setting.
 
 ### Trade-offs
 
@@ -384,7 +374,7 @@ TRANSFER_FSYNC_PER_CHUNK=true
 | Large chunks + no fsync | Absolute fastest | Progress bar jumps to 100% immediately |
 | Small chunks + fsync | Most granular progress | Significantly slower |
 
-**Recommendation**: Use the defaults (2MB + fsync) for the best balance of speed and accurate progress tracking. Only set `TRANSFER_FSYNC_PER_CHUNK=false` if you don't need real-time progress feedback.
+**Choice**: 2MB + fsync, for the best balance of speed and accurate progress tracking.
 
 ---
 

@@ -5,8 +5,8 @@ import { getDesktopBridge } from './bridge';
 import './DesktopSDCardPicker.css';
 
 /**
- * Native "choose SD card folder" button, shown only in the Electron desktop app.
- * The web build keeps using SD_VOLUMES_PATH auto-detection.
+ * Native "choose SD card folder" button. Hidden if the page is opened outside the
+ * desktop app (e.g. the Vite dev server in a normal browser), where there's no bridge.
  */
 export function DesktopSDCardPicker() {
   const bridge = getDesktopBridge();

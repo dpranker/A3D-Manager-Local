@@ -3,7 +3,7 @@
  * shows the React client in a BrowserWindow.
  *
  * Dev (npm run electron:dev): electron/scripts/dev.ts starts Vite and passes
- *   A3D_DEV_SERVER_URL + A3D_API_PORT; data lives in the repo like web mode.
+ *   A3D_DEV_SERVER_URL + A3D_API_PORT; data lives in the repo's .local/.
  * Packaged: the client is served from dist/ by Express; data lives in userData/workspace.
  */
 import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
@@ -42,7 +42,7 @@ const sdCardLocation = new SDCardLocation(app.getPath('userData'));
  * bundled data/ there on every launch.
  */
 function prepareWorkingDirectory(): void {
-  if (!app.isPackaged) return; // dev: keep the repo cwd, sharing .local/ with `npm run dev`
+  if (!app.isPackaged) return; // dev: keep the repo cwd and its .local/
 
   const workDir = path.join(app.getPath('userData'), 'workspace');
   mkdirSync(workDir, { recursive: true });
@@ -54,7 +54,6 @@ function prepareWorkingDirectory(): void {
 }
 
 async function startServer(): Promise<EmbeddedServer> {
-  process.env.A3D_EMBEDDED = '1';
   // Not bundled into main.js: must evaluate only after the cwd/env setup above
   const { startEmbeddedServer } = await import('./embedded-server.js');
   await sdCardLocation.init();

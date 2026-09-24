@@ -125,40 +125,8 @@ Tests for cartridge ownership tracking, settings parsing, and game pak operation
 
 ## SD Card Configuration Tests (4 tests)
 
-Tests for SD card detection and Docker volume path configuration.
+Tests for SD card detection and the path the app searches for cards (set by the desktop SD card picker).
 
 | Category | Tests | Description |
 |----------|-------|-------------|
 | Volumes Path | 4 | SD_VOLUMES_PATH env var, default /Volumes, Linux/macOS paths |
-
----
-
-## Interactive Benchmarks (Settings Page)
-
-The Settings page (`/settings`) includes interactive benchmarks for testing SD card performance with a connected SD card.
-
-### Debug Benchmark
-
-Tests the full sync pipeline:
-1. Uploads `labels.db` to SD Card `/Debug` folder
-2. Creates a local copy with 50 modified entries
-3. Runs quick comparison (file size + ID table hash)
-4. Runs detailed comparison (image data hashing)
-5. Syncs only the 50 changed entries (partial update)
-
-Shows timing breakdown for each step, demonstrating the speed advantage of partial sync over full uploads.
-
-### Chunk Size Benchmark
-
-Tests different write configurations to find optimal settings for your SD card:
-
-| Configuration | Description |
-|--------------|-------------|
-| 64KB - 2MB + fsync | Write chunks with disk sync after each (accurate progress) |
-| 256KB - 4MB (no fsync) | Write chunks and sync once at end (fastest) |
-
-Each configuration runs 2 iterations. Results are sorted by speed, showing the fastest configuration for your specific SD card.
-
-**Typical results**: 4MB chunks without fsync is ~2.3x faster than 64KB with fsync.
-
-See [LABELS_DB_SPECIFICATION.md](./LABELS_DB_SPECIFICATION.md#sd-card-transfer-performance) for configuration details.

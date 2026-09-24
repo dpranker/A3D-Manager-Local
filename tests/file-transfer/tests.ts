@@ -17,7 +17,6 @@ import {
   formatBytes,
   formatSpeed,
   formatTime,
-  createProgressBar,
   FileProgress,
   BatchProgress,
 } from '../../server/lib/file-transfer.js';
@@ -72,21 +71,6 @@ const formatTests = [
 
   test('formatSpeed: formats as bytes/s', () => {
     assertEqual(formatSpeed(10485760), '10.0 MB/s');
-  }),
-
-  test('createProgressBar: 0%', () => {
-    const bar = createProgressBar(0, 10);
-    assertEqual(bar, '[\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591]');
-  }),
-
-  test('createProgressBar: 50%', () => {
-    const bar = createProgressBar(50, 10);
-    assertEqual(bar, '[\u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591\u2591]');
-  }),
-
-  test('createProgressBar: 100%', () => {
-    const bar = createProgressBar(100, 10);
-    assertEqual(bar, '[\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588]');
   }),
 ];
 

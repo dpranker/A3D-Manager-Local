@@ -8,8 +8,8 @@
  * - A failed save keeps its change: it's retried with the next change, by
  *   retrySave, or when saves are flushed.
  * - cancelPendingSave drops a queued change the user has undone.
- * - flushPendingSaves sends everything now and resolves when done. The desktop app
- *   calls it before quitting; the browser build calls it on unload.
+ * - flushPendingSaves sends everything now and resolves when done. The main process
+ *   asks for it before the app quits.
  */
 
 import type { CartridgeSettings } from './defaultSettings';
@@ -125,12 +125,10 @@ async function runSave(cartId: string): Promise<void> {
 }
 
 async function saveOnce(cartId: string, job: NonNullable<CartSaveState['pending']>): Promise<void> {
-  // keepalive lets the request finish if the page unloads mid-save (browser build)
   const localResponse = await fetch(`/api/cartridges/${cartId}/settings`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(job.settings),
-    keepalive: true,
   });
   if (!localResponse.ok) {
     const data = await localResponse.json().catch(() => ({}));
@@ -143,8 +141,7 @@ async function saveOnce(cartId: string, job: NonNullable<CartSaveState['pending'
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sdCardPath: job.sdCardPath }),
-      keepalive: true,
-    });
+      });
     if (!sdResponse.ok) {
       const data = await sdResponse.json().catch(() => ({}));
       throw new Error(data.error || 'Failed to sync to SD card');
@@ -185,11 +182,5 @@ function notifyListeners(cartId: string, status: SaveStatus, error?: string, sav
   }
 }
 
-if (typeof window !== 'undefined') {
-  // Desktop app: the main process asks for this before quitting and waits for it
-  getDesktopBridge()?.onFlushSaves(flushPendingSaves);
-  // Browser build: can't wait, but keepalive lets the requests finish after unload
-  window.addEventListener('beforeunload', () => {
-    void flushPendingSaves();
-  });
-}
+// The main process asks for this before quitting and waits for it
+getDesktopBridge()?.onFlushSaves(flushPendingSaves);

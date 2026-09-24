@@ -154,14 +154,11 @@ npm install
 
 # Desktop app with hot reload (main-process changes restart Electron)
 npm run electron:dev
-
-# Or the web version: opens at http://localhost:5173, with the backend API on port 3001
-npm run dev
 ```
 
 Build the desktop app with `npm run electron:build`: it packages for the current OS into `release/` (Linux: AppImage; Windows: NSIS installer). Each platform has to be built on that OS, because sharp's native binary is platform-specific. The macOS (`dmg`) target is configured in `electron-builder.yml` but isn't built or tested.
 
-In the web version, the SD card is found via `SD_VOLUMES_PATH` (see `.env.example`), and you can eject and re-insert it while the app runs. `electron:dev` and `npm run dev` share the repo's `.local/` folder.
+In development the app keeps its data in the repo's `.local/` folder; the packaged app uses its own data folder.
 
 The Electron code lives in `electron/` (main process, preload, embedded server, build scripts) and `src/desktop/` (renderer bridge and SD card picker). The Express server runs inside the app on `127.0.0.1` (random free port, local requests only).
 
@@ -169,34 +166,9 @@ The Electron code lives in `electron/` (main process, preload, embedded server, 
 
 Pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`: it builds the Linux AppImage and Windows installer on their own runners, smoke-tests both, and attaches them to a draft GitHub release to review and publish. The version comes from the tag. Add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md) before tagging; it becomes the release notes.
 
-### Docker Installation
+### Connecting Your SD Card
 
-A3D Manager can also run in Docker, though with some limitations around SD card handling:
-
-```bash
-# Using Docker Compose (recommended)
-docker compose up -d
-
-# Or build and run manually
-docker build -t a3d-manager .
-docker run -d \
-  --name a3d-manager \
-  -p 3001:3001 \
-  -v a3d-data:/app/.local \
-  a3d-manager
-```
-
-The app will be available at `http://localhost:3001`.
-
-#### SD Card Access
-
-The Docker container mounts your Analogue 3D SD card directly. By default, it expects the standard mount path `/Volumes/ANALOGUE 3D`.
-
-> **Important:** Your SD card must be connected and mounted **before** running `docker compose up -d`. If the SD card isn't mounted, Docker will fail with a "permission denied" error.
-
-**Connecting your SD Card:**
-
-You can either use an external SD card reader, or connect directly to your Analogue 3D via USB-C:
+Use an SD card reader, or connect the SD card through your Analogue 3D over USB-C:
 
 1. Fully power off your Analogue 3D and disconnect all controllers and cables
 2. Leave the SD card inserted in the Analogue 3D
@@ -205,56 +177,7 @@ You can either use an external SD card reader, or connect directly to your Analo
 5. Hold both buttons until the Power LED turns green, then release
 6. Your SD card should now appear as `ANALOGUE 3D` on your computer
 
-See [Analogue's guide](https://www.analogue.co/support/3d/guide/getting-started#updating-3dos) for more details.
-
-**Initial Setup (macOS):**
-
-1. Connect your SD card (see above)
-2. Run `docker compose up -d`
-
-**Initial Setup (Linux):**
-
-1. Create a `.env` file with your SD card path:
-   ```bash
-   cp .env.example .env
-   # Edit SD_VOLUMES_PATH, e.g.:
-   SD_VOLUMES_PATH=/media/$USER/ANALOGUE 3D
-   ```
-2. Run `docker compose up -d`
-
-**If your SD card has a different name**, create a `.env` file:
-```bash
-SD_VOLUMES_PATH=/Volumes/YOUR_SD_CARD_NAME
-```
-
-#### Ejecting the SD Card (Important)
-
-Due to how Docker Desktop works on macOS, you must **quit Docker Desktop entirely** before ejecting your SD card. The Docker VM keeps file shares active even when containers are stopped.
-
-**Workflow for ejecting:**
-
-1. Stop the container: `docker compose down`
-2. Quit Docker Desktop (click Docker icon in menu bar → Quit Docker Desktop)
-3. Eject your SD card normally
-
-**When ready to use again:**
-
-1. Connect your SD card first (it must be mounted before starting Docker)
-2. Start Docker Desktop
-3. Run `docker compose up -d`
-
-> **Note:** If you frequently need to eject your SD card, consider using the [desktop app](#desktop-app-recommended) or [running from source](#running-from-source) instead, which have no restrictions on SD card ejection.
-
-#### Docker Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3001` | Server port |
-| `A3D_ALLOWED_HOSTS` | *(none)* | Comma-separated host names the app may be opened under, besides `localhost` and IP addresses (e.g. `nas.local`). Other names, and requests from other websites, are refused. |
-| `SD_VOLUMES_PATH` | `/Volumes/ANALOGUE 3D` | Path to your Analogue 3D SD card |
-| `TRANSFER_CHUNK_SIZE` | `2097152` | File transfer chunk size (bytes) |
-| `TRANSFER_FSYNC_PER_CHUNK` | `true` | Sync after each chunk for accurate progress |
-| `READ_LABELS_FROM_SD` | `false` | Read labels directly from SD card (slower) |
+See [Analogue's guide](https://www.analogue.co/support/3d/guide/getting-started#updating-3dos) for more details. If the app doesn't find the card, use **Choose SD Card…**.
 
 ### Quick Start
 

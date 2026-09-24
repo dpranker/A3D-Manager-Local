@@ -4,7 +4,6 @@ import { CartridgesPage } from './components/CartridgesPage';
 import { Navbar } from './components/Navbar';
 import { HelpPage } from './components/HelpPage';
 import { SettingsPage } from './components/SettingsPage';
-import { ComponentTestPage } from './components/ComponentTestPage';
 import { LabelSyncProvider } from './components/LabelSyncIndicator';
 import type { SDCard } from './types';
 import type { CartridgeSettings } from './lib/defaultSettings';
@@ -198,7 +197,6 @@ function AppContent() {
           <Route path="/labels" element={<Navigate to="/cartridges" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/help" element={<HelpPage />} />
-          <Route path="/component-test" element={<ComponentTestPage />} />
         </Routes>
       </main>
     </div>
