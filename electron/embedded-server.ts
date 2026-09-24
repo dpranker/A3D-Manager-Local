@@ -1,5 +1,5 @@
 /**
- * Runs the upstream Express API (server/index.ts) inside the Electron main process.
+ * Runs the Express API (server/index.ts) inside the Electron main process.
  *
  * Loaded via dynamic import from main.ts *after* the working directory and
  * environment are prepared, because the server resolves its data paths from
@@ -30,9 +30,9 @@ export interface EmbeddedServer {
 }
 
 /**
- * The API is only for our own window. Reject requests from other origins (the
- * upstream app enables permissive CORS for web mode) and requests whose Host
- * header isn't loopback, which blocks DNS-rebinding attempts from web pages.
+ * The API is only for our own window. Reject requests from other origins, and
+ * requests whose Host header isn't loopback, which blocks DNS-rebinding attempts
+ * from web pages.
  */
 function localOnly(getPort: () => number, extraOrigins: string[]): RequestHandler {
   return (req, res, next) => {

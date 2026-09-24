@@ -1,7 +1,7 @@
 /**
  * Contract between the renderer and the Electron preload script (electron/preload.ts).
- * Only exists when running inside the desktop app; in the plain web build
- * `getDesktopBridge()` returns null and desktop-only UI stays hidden.
+ * `getDesktopBridge()` returns null if the page is opened outside the app (e.g. the
+ * Vite dev server in a normal browser); callers then skip what needs it.
  */
 
 export type ChooseSDCardResult =

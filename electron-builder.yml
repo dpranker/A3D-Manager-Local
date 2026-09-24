@@ -17,8 +17,6 @@ files:
   - "!dist-electron/*.map"
   # Window icon at runtime (see main.ts)
   - electron/resources/icons/256x256.png
-  # Runtime deps of web mode only (tsx runs `npm start`; React is bundled into dist/)
-  - "!node_modules/{tsx,esbuild,@esbuild,react,react-dom,react-router,react-router-dom}{,/**/*}"
 
 # Wayland app_id / WM_CLASS, so the window matches the generated .desktop entry
 extraMetadata:

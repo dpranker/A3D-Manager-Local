@@ -3,7 +3,7 @@
  * detection call, so the desktop app just keeps that env var in sync with the
  * folder the user picked (persisted in userData/desktop-settings.json).
  *
- * Priority: picked folder > SD_VOLUMES_PATH from the environment / .env >
+ * Priority: picked folder > SD_VOLUMES_PATH from the environment >
  * the platform's removable-media mount directory.
  */
 import { existsSync } from 'fs';
@@ -22,7 +22,7 @@ export class SDCardLocation {
     this.settingsFile = path.join(userDataDir, 'desktop-settings.json');
   }
 
-  /** Apply the saved (or default) location to SD_VOLUMES_PATH. Call after dotenv has loaded. */
+  /** Apply the saved location (else SD_VOLUMES_PATH from the environment, else the OS default) to SD_VOLUMES_PATH */
   async init(): Promise<void> {
     const saved = (await this.readSettings()).sdCardPath;
     const location = saved ?? process.env.SD_VOLUMES_PATH ?? defaultMountDir();
