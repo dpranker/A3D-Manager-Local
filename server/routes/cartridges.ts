@@ -54,6 +54,7 @@ import {
   type ImportOptions,
 } from '../lib/bundle-archive.js';
 import { CorruptFileError } from '../lib/safe-write.js';
+import { CART_ID_PATTERN } from '../lib/request-guards.js';
 
 const router = Router();
 
@@ -975,14 +976,20 @@ router.post('/bundle/export', async (req, res) => {
       includeOwnership = true,
       includeSettings = true,
       includeGamePaks = true,
+      includeGamePakBackups = true,
       cartIds,
     } = req.body;
+
+    if (cartIds !== undefined && (!Array.isArray(cartIds) || !cartIds.every((id: unknown) => typeof id === 'string' && CART_ID_PATTERN.test(id)))) {
+      return res.status(400).json({ error: 'cartIds must be cartridge IDs' });
+    }
 
     const bundle = await createBundle({
       includeLabels,
       includeOwnership,
       includeSettings,
       includeGamePaks,
+      includeGamePakBackups,
       cartIds,
     });
 

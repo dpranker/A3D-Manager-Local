@@ -17,7 +17,8 @@ import {
   hasLocalLabelsDb,
 } from '../lib/labels-db-core.js';
 import { getOwnedCartIds } from '../lib/owned-carts.js';
-import { CorruptFileError, updateJsonFile } from '../lib/safe-write.js';
+import { CorruptFileError } from '../lib/safe-write.js';
+import { mutateUserCarts, onUserCartsChanged, readUserCarts, type UserCartEntry } from '../lib/user-carts.js';
 import { detectSDCards } from '../lib/sd-card.js';
 import { compareQuick, compareDetailed } from '../lib/labels-db-compare.js';
 import {
@@ -130,43 +131,17 @@ function getCartMetadata(cartId: string): Partial<CartNameEntry> & { custom?: bo
 loadCartDatabase();
 
 // User cart database - custom names for carts not in the internal database
-interface UserCartEntry {
-  id: string;
-  name: string;
-  addedAt: string;
-}
-
+// (stored by lib/user-carts; this copy follows every change, whoever makes it)
 let userCarts: Map<string, UserCartEntry> = new Map();
-const USER_CARTS_PATH = path.join(process.cwd(), '.local', 'user-carts.json');
 
 async function loadUserCarts(): Promise<void> {
-  try {
-    const data = await readFile(USER_CARTS_PATH, 'utf-8');
-    const entries = JSON.parse(data) as UserCartEntry[];
-    userCarts = new Map(entries.map(e => [e.id.toLowerCase(), e]));
-    console.log(`Loaded ${userCarts.size} user cart entries`);
-  } catch {
-    // File doesn't exist yet, start with empty map
-    userCarts = new Map();
-  }
+  userCarts = new Map((await readUserCarts()).map(e => [e.id.toLowerCase(), e]));
 }
 
-const isUserCartEntries = (value: unknown): value is UserCartEntry[] =>
-  Array.isArray(value) && value.every((e) => e && typeof e.id === 'string' && typeof e.name === 'string');
-
-/**
- * Change user-carts.json: one change at a time, written atomically, starting from the
- * file (not the in-memory copy). If the file can't be read it's kept as
- * user-carts.json.corrupt-<time> and the change fails, instead of being overwritten.
- */
-async function mutateUserCarts<R>(change: (entries: UserCartEntry[]) => R): Promise<R> {
-  await mkdir(path.dirname(USER_CARTS_PATH), { recursive: true });
-  return updateJsonFile(USER_CARTS_PATH, () => [] as UserCartEntry[], (entries) => {
-    const result = change(entries);
-    userCarts = new Map(entries.map(e => [e.id.toLowerCase(), e]));
-    return result;
-  }, isUserCartEntries);
-}
+onUserCartsChanged((entries) => {
+  userCarts = new Map(entries.map(e => [e.id.toLowerCase(), e]));
+  invalidateSortedCache();
+});
 
 function addUserCart(id: string, name: string): Promise<UserCartEntry> {
   const entry: UserCartEntry = {

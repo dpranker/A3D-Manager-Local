@@ -11,13 +11,33 @@ interface BundleManifest {
     settingsCount: number;
     gamePaksCount: number;
     gamePakBackupsCount: number;
+    /** Individual label images (selection exports) */
+    labelsCount?: number;
+    /** library.json files and custom names (bundles made before these were added have neither) */
+    libraryCount?: number;
+    customNamesCount?: number;
     cartIds: string[];
   };
+}
+
+type Counts = { added: number; skipped: number; overwritten: number };
+
+/** Labels in any form: the full database, individual images, or custom names */
+const hasLabelData = (m: BundleManifest) =>
+  m.contents.hasLabelsDb || (m.contents.labelsCount ?? 0) > 0 || (m.contents.customNamesCount ?? 0) > 0;
+const hasSettingsData = (m: BundleManifest) => m.contents.settingsCount > 0 || (m.contents.libraryCount ?? 0) > 0;
+
+function countsText(label: string, c: Counts | undefined): string | null {
+  if (!c || c.added + c.skipped + c.overwritten === 0) return null;
+  return `${label}: ${c.added} added${c.overwritten ? `, ${c.overwritten} updated` : ''}${c.skipped ? `, ${c.skipped} skipped` : ''}`;
 }
 
 interface ImportResult {
   success: boolean;
   labelsImported: boolean;
+  individualLabelsImported?: { added: number; updated: number; skipped: number };
+  libraryImported?: Counts;
+  customNamesImported?: Counts;
   ownershipMerged: { added: number; skipped: number };
   settingsImported: { added: number; skipped: number; overwritten: number; legacy?: number };
   gamePaksImported: { added: number; skipped: number; overwritten: number };
@@ -97,9 +117,9 @@ export function ImportBundleModal({
       setManifest(info);
 
       // Auto-set options based on what's in the bundle
-      setImportLabels(info.contents.hasLabelsDb);
+      setImportLabels(hasLabelData(info));
       setImportOwnership(info.contents.hasOwnedCarts);
-      setImportSettings(info.contents.settingsCount > 0);
+      setImportSettings(hasSettingsData(info));
       setImportGamePaks(info.contents.gamePaksCount > 0);
       setImportGamePakBackups(info.contents.gamePakBackupsCount > 0);
     } catch (err) {
@@ -212,6 +232,19 @@ export function ImportBundleModal({
             {result.labelsImported && (
               <div className="result-item">Labels database imported</div>
             )}
+            {[
+              countsText('Labels', result.individualLabelsImported && {
+                added: result.individualLabelsImported.added,
+                overwritten: result.individualLabelsImported.updated,
+                skipped: result.individualLabelsImported.skipped,
+              }),
+              countsText('Custom names', result.customNamesImported),
+              countsText('Library details', result.libraryImported),
+            ]
+              .filter(Boolean)
+              .map((text) => (
+                <div key={text} className="result-item">{text}</div>
+              ))}
             {(result.ownershipMerged.added > 0 || result.ownershipMerged.skipped > 0) && (
               <div className="result-item">
                 Ownership: {result.ownershipMerged.added} added, {result.ownershipMerged.skipped} skipped
@@ -269,6 +302,24 @@ export function ImportBundleModal({
                   <span>Included</span>
                 </div>
               )}
+              {(manifest.contents.labelsCount ?? 0) > 0 && (
+                <div className="detail-row">
+                  <span>Label Artwork:</span>
+                  <span>{manifest.contents.labelsCount} cartridges</span>
+                </div>
+              )}
+              {(manifest.contents.customNamesCount ?? 0) > 0 && (
+                <div className="detail-row">
+                  <span>Custom Names:</span>
+                  <span>{manifest.contents.customNamesCount}</span>
+                </div>
+              )}
+              {(manifest.contents.libraryCount ?? 0) > 0 && (
+                <div className="detail-row">
+                  <span>Library Details:</span>
+                  <span>{manifest.contents.libraryCount} games</span>
+                </div>
+              )}
               {manifest.contents.hasOwnedCarts && (
                 <div className="detail-row">
                   <span>Ownership Data:</span>
@@ -299,14 +350,14 @@ export function ImportBundleModal({
           <div className="import-options">
             <h4>Import Options</h4>
 
-            <label className={`import-option ${!manifest.contents.hasLabelsDb ? 'disabled' : ''}`}>
+            <label className={`import-option ${!hasLabelData(manifest) ? 'disabled' : ''}`}>
               <input
                 type="checkbox"
                 checked={importLabels}
                 onChange={(e) => setImportLabels(e.target.checked)}
-                disabled={importing || !manifest.contents.hasLabelsDb}
+                disabled={importing || !hasLabelData(manifest)}
               />
-              <span>Labels Database</span>
+              <span>{manifest.contents.hasLabelsDb ? 'Labels Database' : 'Label Artwork'} and Custom Names</span>
             </label>
 
             <label className={`import-option ${!manifest.contents.hasOwnedCarts ? 'disabled' : ''}`}>
@@ -319,14 +370,17 @@ export function ImportBundleModal({
               <span>Ownership Data</span>
             </label>
 
-            <label className={`import-option ${manifest.contents.settingsCount === 0 ? 'disabled' : ''}`}>
+            <label className={`import-option ${!hasSettingsData(manifest) ? 'disabled' : ''}`}>
               <input
                 type="checkbox"
                 checked={importSettings}
                 onChange={(e) => setImportSettings(e.target.checked)}
-                disabled={importing || manifest.contents.settingsCount === 0}
+                disabled={importing || !hasSettingsData(manifest)}
               />
-              <span>Game Settings ({manifest.contents.settingsCount})</span>
+              <span>
+                Game Settings ({manifest.contents.settingsCount})
+                {(manifest.contents.libraryCount ?? 0) > 0 && ` and Library Details (${manifest.contents.libraryCount})`}
+              </span>
             </label>
 
             <label className={`import-option ${manifest.contents.gamePaksCount === 0 ? 'disabled' : ''}`}>
