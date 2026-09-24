@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useImageCache, useSettingsClipboard } from '../App';
 import { IconButton, OptionSelector, ToggleSwitch, ValueSelector } from './controls';
 import { Tooltip } from './ui/Tooltip';
+import { Button } from './ui';
 import { CartridgeSprite } from './CartridgeSprite';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { useLabelSync } from './LabelSyncIndicator';
@@ -9,7 +10,7 @@ import { LibraryTab } from './LibraryTab';
 import { MemoriesTab } from './MemoriesTab';
 import { ScreenshotsTab } from './ScreenshotsTab';
 import { cartridgeShellColor } from '../lib/cartColors';
-import { queueSettingsSave, onSaveStatus } from '../lib/settingsAutoSave';
+import { cancelPendingSave, onSaveStatus, queueSettingsSave, retrySave } from '../lib/settingsAutoSave';
 import {
   createDefaultSettings,
   valueLabel,
@@ -1136,32 +1137,33 @@ type SettingsEditorTab = 'display' | 'hardware';
 function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSettingsChange, onCartridgeColorChange }: SettingsEditorProps) {
   const [activeTab, setActiveTab] = useState<SettingsEditorTab>('display');
   const [settings, setSettings] = useState<CartridgeSettings>(initialSettings);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_saveStatus, setSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  // Track the initial settings JSON to detect actual changes
+  // The settings as last saved, to detect actual changes
   const initialSettingsJson = useRef(JSON.stringify(initialSettings));
+  // Whether this editor has a change queued (so undoing it can cancel it)
+  const queuedChange = useRef(false);
 
   const currentDisplayMode = settings.display.odm;
   const isCleanMode = currentDisplayMode === 'clean';
 
   // Subscribe to save status updates for this cartridge
   useEffect(() => {
-    const unsubscribe = onSaveStatus((statusCartId, status, errorMsg) => {
+    const unsubscribe = onSaveStatus((statusCartId, status, errorMsg, savedJson) => {
       if (statusCartId === cartId) {
         setSaveStatus(status);
         if (status === 'error') {
           setError(errorMsg || 'Save failed');
         } else if (status === 'saved') {
           setError(null);
-          // Update our baseline so we know current state is saved
-          initialSettingsJson.current = JSON.stringify(settings);
+          // The baseline is what was written, which may be older than the editor's state
+          if (savedJson !== undefined) initialSettingsJson.current = savedJson;
         }
       }
     });
     return unsubscribe;
-  }, [cartId, settings]);
+  }, [cartId]);
 
   // The parent passes a new callback on every render and re-renders when it's called;
   // keep it out of the effect's dependencies or each notification re-queues the save
@@ -1188,7 +1190,13 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
     // Only queue save if settings differ from initial/last-saved state
     if (currentJson !== initialSettingsJson.current) {
       queueSettingsSave(cartId, settings, sdCardPath);
+      queuedChange.current = true;
       // Notify parent of settings change so copy uses current settings
+      onSettingsChangeRef.current?.(settings);
+    } else if (queuedChange.current) {
+      // Changed back to what's saved (A -> B -> A): drop the queued B
+      cancelPendingSave(cartId);
+      queuedChange.current = false;
       onSettingsChangeRef.current?.(settings);
     }
   }, [cartId, settings, sdCardPath]);
@@ -1284,7 +1292,19 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
         </button>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {saveStatus === 'error' ? (
+        <div className="settings-save-status error">
+          Not saved: {error}{' '}
+          <Button size="sm" variant="ghost" onClick={() => void retrySave(cartId)}>
+            Retry
+          </Button>
+        </div>
+      ) : (
+        error && <div className="error-message">{error}</div>
+      )}
+      {(saveStatus === 'pending' || saveStatus === 'saving') && (
+        <div className={`settings-save-status ${saveStatus}`}>{saveStatus === 'saving' ? 'Saving…' : 'Unsaved changes'}</div>
+      )}
 
       {/* Display Settings */}
       {activeTab === 'display' && (
