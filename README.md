@@ -250,6 +250,7 @@ Due to how Docker Desktop works on macOS, you must **quit Docker Desktop entirel
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | Server port |
+| `A3D_ALLOWED_HOSTS` | *(none)* | Comma-separated host names the app may be opened under, besides `localhost` and IP addresses (e.g. `nas.local`). Other names, and requests from other websites, are refused. |
 | `SD_VOLUMES_PATH` | `/Volumes/ANALOGUE 3D` | Path to your Analogue 3D SD card |
 | `TRANSFER_CHUNK_SIZE` | `2097152` | File transfer chunk size (bytes) |
 | `TRANSFER_FSYNC_PER_CHUNK` | `true` | Sync after each chunk for accurate progress |

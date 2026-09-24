@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
 import { mkdir } from 'fs/promises';
 
@@ -12,14 +11,17 @@ import localDataRouter from './routes/local-data.js';
 import firmwareRouter from './routes/firmware.js';
 import libraryRouter from './routes/library.js';
 import { removeLeftoverPartials } from './lib/safe-write.js';
-import { sdCardPathGuard } from './lib/request-guards.js';
+import { sdCardPathGuard, webOriginGuard } from './lib/request-guards.js';
 import screenshotsRouter from './routes/screenshots.js';
 
 export const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
+// Middleware. Browser/Docker mode: only the app's own pages may call the API (the
+// desktop app checks this itself before requests get here)
+if (!process.env.A3D_EMBEDDED) {
+  app.use('/api', webOriginGuard);
+}
 app.use(express.json());
 // Any sdCardPath given to the API must be an Analogue 3D card
 app.use('/api', sdCardPathGuard);
