@@ -83,6 +83,26 @@
   flex-shrink: 0;
 }
 
+.orphan-cartridge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.orphan-cartridge-row input {
+  accent-color: var(--color-accent);
+}
+
+.orphan-cartridge-row span {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex: 1;
+}
+
 .setting-row + .setting-row {
   margin-top: 1rem;
 }
