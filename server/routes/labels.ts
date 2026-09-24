@@ -112,9 +112,10 @@ function getCartName(cartId: string): string {
   return userEntry?.name || '';
 }
 
-function getCartMetadata(cartId: string): Partial<CartNameEntry> {
+function getCartMetadata(cartId: string): Partial<CartNameEntry> & { custom?: boolean } {
   const entry = cartNameMap.get(cartId.toLowerCase());
-  if (!entry) return {};
+  // Not in the built-in database: homebrew, flash carts, reproductions
+  if (!entry) return { custom: true };
   return {
     region: entry.region,
     languages: entry.languages,
@@ -302,6 +303,7 @@ interface EnhancedEntry {
   videoMode?: 'NTSC' | 'PAL' | 'Unknown';
   releaseType?: string;
   revision?: number | null;
+  custom?: boolean;
 }
 
 // Cache for sorted entries (invalidated on import/add/delete)
@@ -328,6 +330,7 @@ async function getSortedEntries(): Promise<EnhancedEntry[] | null> {
       videoMode: meta.videoMode,
       releaseType: meta.releaseType,
       revision: meta.revision,
+      custom: meta.custom,
     };
   });
 
@@ -600,6 +603,7 @@ router.get('/page/:page', async (req, res) => {
             videoMode: meta.videoMode,
             releaseType: meta.releaseType,
             revision: meta.revision,
+            custom: meta.custom,
           });
         }
       }
@@ -626,6 +630,7 @@ router.get('/page/:page', async (req, res) => {
           videoMode: meta.videoMode,
           releaseType: meta.releaseType,
           revision: meta.revision,
+          custom: meta.custom,
         };
       });
 

@@ -104,6 +104,23 @@
   transform: scale(1.02);
 }
 
+/* Tag for carts outside the built-in database */
+.cartridge-card-custom {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #000000;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 14px;
+  pointer-events: none;
+  /* Above the cart sprite */
+  z-index: 10;
+}
+
 .cartridge-card .selection-checkbox {
   position: absolute;
   top: 0.5rem;

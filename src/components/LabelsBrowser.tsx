@@ -21,6 +21,8 @@ interface LabelEntry {
   region?: string;
   languages?: string[];
   videoMode?: 'NTSC' | 'PAL' | 'Unknown';
+  /** Not in the built-in cart database (homebrew, flash carts, reproductions) */
+  custom?: boolean;
 }
 
 interface LabelsPageResponse {
@@ -618,6 +620,7 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, colorsRefreshKey, sdC
                     key={entry.cartId}
                     cartId={entry.cartId}
                     name={entry.name}
+                    custom={entry.custom}
                     gridIndex={i}
                     hasLabel={entry.index >= 0}
                     selectionMode={selectionMode}
