@@ -32,12 +32,16 @@ export function LabelSyncProvider({ children }: LabelSyncProviderProps) {
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
   const [labelsRefreshKey, setLabelsRefreshKey] = useState(0);
   const prevSDCardPath = useRef<string | null>(null);
+  // Only the latest check may set the status (the selected card can change mid-check)
+  const checkIdRef = useRef(0);
 
   const triggerLabelsRefresh = useCallback(() => {
     setLabelsRefreshKey(prev => prev + 1);
   }, []);
 
   const checkSyncStatus = useCallback(async () => {
+    const checkId = ++checkIdRef.current;
+    const isCurrent = () => checkId === checkIdRef.current;
     if (!selectedSDCard) {
       setSyncStatus('local-only');
       return;
@@ -46,7 +50,8 @@ export function LabelSyncProvider({ children }: LabelSyncProviderProps) {
     setSyncStatus('checking');
 
     try {
-      const response = await fetch('/api/labels/compare/quick');
+      const response = await fetch(`/api/labels/compare/quick?sdCardPath=${encodeURIComponent(selectedSDCard.path)}`);
+      if (!isCurrent()) return;
       if (!response.ok) {
         // Check if the error is specifically about no local labels.db
         const errorData = await response.json().catch(() => ({}));
@@ -56,6 +61,7 @@ export function LabelSyncProvider({ children }: LabelSyncProviderProps) {
           const existsResponse = await fetch(
             `/api/sync/labels/exists?sdCardPath=${encodeURIComponent(selectedSDCard.path)}`
           );
+          if (!isCurrent()) return;
           if (existsResponse.ok) {
             const { exists } = await existsResponse.json();
             if (exists) {
@@ -74,6 +80,7 @@ export function LabelSyncProvider({ children }: LabelSyncProviderProps) {
       }
 
       const result = await response.json();
+      if (!isCurrent()) return;
 
       if (result.identical) {
         setSyncStatus('synced');
@@ -83,7 +90,7 @@ export function LabelSyncProvider({ children }: LabelSyncProviderProps) {
       }
     } catch (err) {
       console.error('Label sync check failed:', err);
-      setSyncStatus('local-only');
+      if (isCurrent()) setSyncStatus('local-only');
     }
   }, [selectedSDCard]);
 

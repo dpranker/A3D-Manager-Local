@@ -24,6 +24,9 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **Downloading labels from the SD card checks the file first**, so an invalid `labels.db` on the card can't replace your local labels.
 - **Your owned list and custom names can't be wiped by a damaged file.** If `owned-carts.json` or `user-carts.json` can't be read, it's kept as a `.corrupt-<time>` copy and the change shows an error, instead of the next change overwriting it with an empty list.
 - **Simultaneous changes no longer overwrite each other** (ownership, custom names, label edits, Controller Pak backups).
+- **"Labels Synced" checks the SD card you selected**, not whichever card was detected first, and a result for a previously selected card is ignored.
+- **Copying a Controller Pak save to a card without that game's folder** no longer fails for titles with characters the card can't store (such as `:`). New card folders are named the same way for settings, `library.json` and Controller Pak saves.
+- The app rejects any SD card path that isn't an Analogue 3D card, for every card operation.
 
 ## [0.1.0] - 2026-09-23
 

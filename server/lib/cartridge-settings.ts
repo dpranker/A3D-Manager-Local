@@ -494,6 +494,24 @@ export async function ensureLocalGameFolder(cartId: string, title?: string): Pro
 }
 
 /**
+ * The card's game folder for a cartridge: the existing one (whatever its title),
+ * else a new "<Title> <id>" named from the cart database ("Unknown Cartridge" for
+ * carts outside it, as the console names them), with characters FAT rejects removed.
+ * Used by every upload that may create the folder, so they all name it the same way.
+ */
+export async function ensureSdGameFolder(sdCardPath: string, cartId: string): Promise<string> {
+  const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
+  const existingFolder = await findGameFolder(gamesDir, cartId);
+  if (existingFolder) {
+    return existingFolder;
+  }
+
+  const folderPath = path.join(gamesDir, `${await folderTitle(cartId)} ${cartId.toLowerCase()}`);
+  await mkdir(folderPath, { recursive: true });
+  return folderPath;
+}
+
+/**
  * Save settings to local storage (validated and normalized first)
  */
 export async function saveLocalSettings(
@@ -584,15 +602,8 @@ export async function uploadSettingsToSD(
     return { success: false, error: support.reason };
   }
 
-  const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
-  let sdGameFolder = await findGameFolder(gamesDir, cartId);
-
   try {
-    if (!sdGameFolder) {
-      // Mirror the local folder name ("Title hexid")
-      sdGameFolder = path.join(gamesDir, path.basename(path.dirname(localPath)));
-      await mkdir(sdGameFolder, { recursive: true });
-    }
+    const sdGameFolder = await ensureSdGameFolder(sdCardPath, cartId);
     const sdSettingsPath = path.join(sdGameFolder, 'settings.json');
     await writeFileAtomic(sdSettingsPath, serializeSettings(settings));
     return { success: true, path: sdSettingsPath };

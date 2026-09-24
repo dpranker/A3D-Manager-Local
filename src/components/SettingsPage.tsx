@@ -218,7 +218,8 @@ export function SettingsPage() {
     setDetailedResult(null);
 
     try {
-      const response = await fetch('/api/labels/compare/quick');
+      if (!selectedSDCard) throw new Error('No SD card selected');
+      const response = await fetch(`/api/labels/compare/quick?sdCardPath=${encodeURIComponent(selectedSDCard.path)}`);
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Comparison failed');
@@ -238,7 +239,9 @@ export function SettingsPage() {
     setDetailedResult(null);
 
     try {
-      const response = await fetch(`/api/labels/compare/detailed?fullHash=${fullHash}`);
+      if (!selectedSDCard) throw new Error('No SD card selected');
+      const params = new URLSearchParams({ sdCardPath: selectedSDCard.path, fullHash: String(fullHash) });
+      const response = await fetch(`/api/labels/compare/detailed?${params}`);
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Comparison failed');
