@@ -40,6 +40,12 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **The debug benchmark is gone from release builds.** It wrote test files to the SD card and was shown in Settings for everyone; it's now only in development builds.
 - **Browser and Docker mode only answer the app's own pages.** Other websites can't call the local server, and it only answers on `localhost`, IP addresses, or names listed in `A3D_ALLOWED_HOSTS`. The desktop app already worked this way.
 - If deleting orphaned folders fails partway through, the folders already deleted still come off the owned list.
+- The filter dropdown arrows no longer sit against the right edge.
+
+### Removed
+
+- **Browser and Docker versions.** A3D Manager is a desktop app only now: the Dockerfile, `docker-compose.yml`, `.env` settings and the `npm run dev` / `npm start` browser setup are gone. Development uses `npm run electron:dev`.
+- **Debug tools from upstream:** the Debug Benchmark, Chunk Size Benchmark and Labels Database Comparison under Advanced Settings (the sync dialog shows label differences), and the component test page.
 
 ## [0.1.0] - 2026-09-23
 
