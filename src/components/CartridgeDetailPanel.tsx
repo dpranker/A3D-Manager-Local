@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useImageCache, useSettingsClipboard } from '../App';
 import { IconButton, OptionSelector, ToggleSwitch, ValueSelector } from './controls';
 import { Tooltip } from './ui/Tooltip';
+import { Button } from './ui';
 import { CartridgeSprite } from './CartridgeSprite';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { useLabelSync } from './LabelSyncIndicator';
@@ -9,7 +10,8 @@ import { LibraryTab } from './LibraryTab';
 import { MemoriesTab } from './MemoriesTab';
 import { ScreenshotsTab } from './ScreenshotsTab';
 import { cartridgeShellColor } from '../lib/cartColors';
-import { queueSettingsSave, onSaveStatus } from '../lib/settingsAutoSave';
+import { cancelPendingSave, onSaveStatus, queueSettingsSave, retrySave } from '../lib/settingsAutoSave';
+import { apiFetch, apiPostJson, errorMessage } from '../lib/api';
 import {
   createDefaultSettings,
   valueLabel,
@@ -129,6 +131,7 @@ export function CartridgeDetailPanel({
 }: CartridgeDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('label');
   const [isOwned, setIsOwned] = useState(false);
+  const [ownershipError, setOwnershipError] = useState<string | null>(null);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
   // Follows the Settings tab's Cartridge Color live; starts with the grid's value
   const [currentShellColor, setCurrentShellColor] = useState(shellColor);
@@ -172,15 +175,14 @@ export function CartridgeDetailPanel({
 
   const handleToggleOwned = async (newValue: boolean) => {
     try {
-      if (newValue) {
-        await fetch(`/api/cartridges/owned/${cartId}`, { method: 'POST' });
-      } else {
-        await fetch(`/api/cartridges/owned/${cartId}`, { method: 'DELETE' });
-      }
+      setOwnershipError(null);
+      await apiFetch(`/api/cartridges/owned/${cartId}`, { method: newValue ? 'POST' : 'DELETE' });
       setIsOwned(newValue);
       onUpdate();
     } catch (err) {
+      // The toggle stays as it was: the change wasn't saved
       console.error('Failed to toggle ownership:', err);
+      setOwnershipError(`Ownership wasn't changed: ${errorMessage(err)}`);
     }
   };
 
@@ -279,6 +281,7 @@ export function CartridgeDetailPanel({
         </div>
 
         <div className="slide-over-content">
+          {ownershipError && <div className="error-message">{ownershipError}</div>}
           {activeTab === 'label' && (
             <LabelTab
               cartId={cartId}
@@ -488,11 +491,18 @@ function LabelTab({
         throw new Error(data.error || 'Delete failed');
       }
 
+      markLocalChanges(); // Mark that local labels have changed
+
       if (isUserCart) {
-        await fetch(`/api/labels/user-cart/${cartId}`, { method: 'DELETE' });
+        try {
+          await apiFetch(`/api/labels/user-cart/${cartId}`, { method: 'DELETE' });
+        } catch (err) {
+          // The label is gone; say so rather than closing as if the name went too
+          onDelete?.();
+          throw new Error(`The label was deleted, but the custom name wasn't removed: ${errorMessage(err)}`);
+        }
       }
 
-      markLocalChanges(); // Mark that local labels have changed
       onDelete?.();
       onClose();
     } catch (err) {
@@ -860,6 +870,16 @@ function SettingsTab({ cartId, sdCardPath, gameName, onCartridgeColorChange }: S
     }
   };
 
+  /** Copy the local settings to the card; returns an error to show, or null. The local save already happened. */
+  const copySettingsToCard = async (cardPath: string): Promise<string | null> => {
+    try {
+      await apiPostJson(`/api/cartridges/${cartId}/settings/upload`, { sdCardPath: cardPath });
+      return null;
+    } catch (err) {
+      return `Saved locally, but copying to the SD card failed: ${errorMessage(err)}`;
+    }
+  };
+
   const handleImportFile = async (file: File) => {
     try {
       setError(null);
@@ -875,16 +895,11 @@ function SettingsTab({ cartId, sdCardPath, gameName, onCartridgeColorChange }: S
       }
 
       // If connected, also upload to SD
-      if (syncPath) {
-        await fetch(`/api/cartridges/${cartId}/settings/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sdCardPath: syncPath }),
-        });
-      }
+      const cardError = syncPath ? await copySettingsToCard(syncPath) : null;
 
       await fetchInfo();
       setConflictState('resolved');
+      if (cardError) setError(cardError);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
     }
@@ -930,15 +945,10 @@ function SettingsTab({ cartId, sdCardPath, gameName, onCartridgeColorChange }: S
       }
 
       // If SD card connected, also sync to SD
-      if (syncPath) {
-        await fetch(`/api/cartridges/${cartId}/settings/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sdCardPath: syncPath }),
-        });
-      }
+      const cardError = syncPath ? await copySettingsToCard(syncPath) : null;
 
       await fetchInfo();
+      if (cardError) setError(cardError);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset settings');
     }
@@ -1136,32 +1146,33 @@ type SettingsEditorTab = 'display' | 'hardware';
 function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSettingsChange, onCartridgeColorChange }: SettingsEditorProps) {
   const [activeTab, setActiveTab] = useState<SettingsEditorTab>('display');
   const [settings, setSettings] = useState<CartridgeSettings>(initialSettings);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_saveStatus, setSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  // Track the initial settings JSON to detect actual changes
+  // The settings as last saved, to detect actual changes
   const initialSettingsJson = useRef(JSON.stringify(initialSettings));
+  // Whether this editor has a change queued (so undoing it can cancel it)
+  const queuedChange = useRef(false);
 
   const currentDisplayMode = settings.display.odm;
   const isCleanMode = currentDisplayMode === 'clean';
 
   // Subscribe to save status updates for this cartridge
   useEffect(() => {
-    const unsubscribe = onSaveStatus((statusCartId, status, errorMsg) => {
+    const unsubscribe = onSaveStatus((statusCartId, status, errorMsg, savedJson) => {
       if (statusCartId === cartId) {
         setSaveStatus(status);
         if (status === 'error') {
           setError(errorMsg || 'Save failed');
         } else if (status === 'saved') {
           setError(null);
-          // Update our baseline so we know current state is saved
-          initialSettingsJson.current = JSON.stringify(settings);
+          // The baseline is what was written, which may be older than the editor's state
+          if (savedJson !== undefined) initialSettingsJson.current = savedJson;
         }
       }
     });
     return unsubscribe;
-  }, [cartId, settings]);
+  }, [cartId]);
 
   // The parent passes a new callback on every render and re-renders when it's called;
   // keep it out of the effect's dependencies or each notification re-queues the save
@@ -1188,7 +1199,13 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
     // Only queue save if settings differ from initial/last-saved state
     if (currentJson !== initialSettingsJson.current) {
       queueSettingsSave(cartId, settings, sdCardPath);
+      queuedChange.current = true;
       // Notify parent of settings change so copy uses current settings
+      onSettingsChangeRef.current?.(settings);
+    } else if (queuedChange.current) {
+      // Changed back to what's saved (A -> B -> A): drop the queued B
+      cancelPendingSave(cartId);
+      queuedChange.current = false;
       onSettingsChangeRef.current?.(settings);
     }
   }, [cartId, settings, sdCardPath]);
@@ -1284,7 +1301,19 @@ function SettingsEditor({ cartId, settings: initialSettings, sdCardPath, onSetti
         </button>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {saveStatus === 'error' ? (
+        <div className="settings-save-status error">
+          Not saved: {error}{' '}
+          <Button size="sm" variant="ghost" onClick={() => void retrySave(cartId)}>
+            Retry
+          </Button>
+        </div>
+      ) : (
+        error && <div className="error-message">{error}</div>
+      )}
+      {(saveStatus === 'pending' || saveStatus === 'saving') && (
+        <div className={`settings-save-status ${saveStatus}`}>{saveStatus === 'saving' ? 'Saving…' : 'Unsaved changes'}</div>
+      )}
 
       {/* Display Settings */}
       {activeTab === 'display' && (
@@ -1800,7 +1829,11 @@ export function GamePakTab({ cartId, sdCardPath, gameName }: GamePakTabProps) {
         const data = await response.json();
         throw new Error(data.error || 'Failed to restore backup');
       }
+      const result = (await response.json()) as { sd: 'ok' | 'skipped' | { error: string } };
       await fetchInfo();
+      if (typeof result.sd === 'object') {
+        setError(`Restored locally, but copying to the SD card failed: ${result.sd.error}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restore backup');
     }

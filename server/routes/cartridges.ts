@@ -54,6 +54,7 @@ import {
   type ImportOptions,
 } from '../lib/bundle-archive.js';
 import { CorruptFileError } from '../lib/safe-write.js';
+import { CART_ID_PATTERN } from '../lib/request-guards.js';
 
 const router = Router();
 
@@ -137,12 +138,24 @@ router.post('/owned/cleanup-orphans/apply', async (req, res) => {
     const safeIds = [...new Set((cartIds as string[]).map((id) => id.toLowerCase()))]
       .filter((id) => byId.has(id));
     const deletedFolders: string[] = [];
+    const deletedIds: string[] = [];
+    let failure: string | null = null;
     for (const id of safeIds) {
       const folder = byId.get(id)!;
-      await rm(path.join(gamesDir, folder), { recursive: true });
+      try {
+        await rm(path.join(gamesDir, folder), { recursive: true });
+      } catch (error) {
+        failure = `${folder}: ${error instanceof Error ? error.message : String(error)}`;
+        break;
+      }
       deletedFolders.push(folder);
+      deletedIds.push(id);
     }
-    const removed = await removeOwnedCartridges(safeIds);
+    // Folders already deleted leave the owned list even if a later one failed
+    const removed = deletedIds.length ? await removeOwnedCartridges(deletedIds) : 0;
+    if (failure) {
+      return res.status(500).json({ error: `Couldn't delete ${failure}`, removed, deletedFolders });
+    }
     res.json({ removed, deletedFolders });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'Could not clean orphaned cartridges' });
@@ -691,7 +704,7 @@ router.post('/:cartId/game-pak/download', async (req, res) => {
  */
 router.post('/:cartId/game-pak/upload', async (req, res) => {
   const { cartId } = req.params;
-  const { sdCardPath, title } = req.body;
+  const { sdCardPath } = req.body;
 
   if (!/^[0-9a-fA-F]{8}$/.test(cartId)) {
     return res.status(400).json({ error: 'Invalid cart ID format' });
@@ -702,7 +715,7 @@ router.post('/:cartId/game-pak/upload', async (req, res) => {
   }
 
   try {
-    const result = await uploadGamePakToSD(cartId, sdCardPath, title);
+    const result = await uploadGamePakToSD(cartId, sdCardPath);
     if (result.success) {
       res.json({ success: true, path: result.path });
     } else {
@@ -939,8 +952,10 @@ router.post('/:cartId/game-pak/backups/:backupId/restore', async (req, res) => {
     );
     res.json({
       success: true,
+      local: 'ok',
+      sd: result.sd,
       restoredToLocal: result.local,
-      restoredToSD: result.sd,
+      restoredToSD: result.sd === 'ok',
     });
   } catch (error) {
     console.error('Error restoring backup:', error);
@@ -973,14 +988,20 @@ router.post('/bundle/export', async (req, res) => {
       includeOwnership = true,
       includeSettings = true,
       includeGamePaks = true,
+      includeGamePakBackups = true,
       cartIds,
     } = req.body;
+
+    if (cartIds !== undefined && (!Array.isArray(cartIds) || !cartIds.every((id: unknown) => typeof id === 'string' && CART_ID_PATTERN.test(id)))) {
+      return res.status(400).json({ error: 'cartIds must be cartridge IDs' });
+    }
 
     const bundle = await createBundle({
       includeLabels,
       includeOwnership,
       includeSettings,
       includeGamePaks,
+      includeGamePakBackups,
       cartIds,
     });
 

@@ -24,6 +24,22 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **Downloading labels from the SD card checks the file first**, so an invalid `labels.db` on the card can't replace your local labels.
 - **Your owned list and custom names can't be wiped by a damaged file.** If `owned-carts.json` or `user-carts.json` can't be read, it's kept as a `.corrupt-<time>` copy and the change shows an error, instead of the next change overwriting it with an empty list.
 - **Simultaneous changes no longer overwrite each other** (ownership, custom names, label edits, Controller Pak backups).
+- **"Labels Synced" checks the SD card you selected**, not whichever card was detected first, and a result for a previously selected card is ignored.
+- **Copying a Controller Pak save to a card without that game's folder** no longer fails for titles with characters the card can't store (such as `:`). New card folders are named the same way for settings, `library.json` and Controller Pak saves.
+- The app rejects any SD card path that isn't an Analogue 3D card, for every card operation.
+- **Settings changes aren't lost when you quit.** Closing the desktop app first sends any settings change still waiting to be saved, and lets file transfers in progress finish (each with a time limit).
+- **Undoing a settings change within two seconds no longer saves the change.** Before, switching a setting and switching it back left the first change queued, and it was saved anyway.
+- **A failed settings save is kept and can be retried.** The Settings tab shows when changes are unsaved or saving, and a Retry button when a save fails. Saves for one cartridge no longer run at the same time.
+- **Failures are reported instead of looking like success.** Importing or resetting settings, and restoring a Controller Pak backup, now say when the local save worked but the SD card copy failed. Changing ownership (one cart or several) and removing a custom name show the error and leave things as they were.
+- **Backups (.a3d bundles) now include library details and custom names.** Library details travel with Settings and custom names with Labels, in full and selection exports.
+- **Label artwork from selection bundles can be imported.** The import dialog only offered labels for bundles with a full labels database.
+- **Unticking Game Pak backups when exporting now leaves them out.**
+- **Bundles are checked before anything is imported:** cartridge IDs, the labels database, Controller Pak saves, library details and the unpacked size. Entries that fail are skipped and listed, instead of being written or failing the whole import.
+- **Controller Pak saves are backed up automatically before they're replaced**, locally or on the SD card (importing, restoring, downloading, uploading or a bundle import). The replaced save appears in the backup list as "Automatic: …", unless an identical backup already exists.
+- **Choosing which labels to keep shows what differs.** When both this computer and the SD card have labels, the sync dialog lists the cartridges whose labels differ or exist on only one side.
+- **The debug benchmark is gone from release builds.** It wrote test files to the SD card and was shown in Settings for everyone; it's now only in development builds.
+- **Browser and Docker mode only answer the app's own pages.** Other websites can't call the local server, and it only answers on `localhost`, IP addresses, or names listed in `A3D_ALLOWED_HOSTS`. The desktop app already worked this way.
+- If deleting orphaned folders fails partway through, the folders already deleted still come off the owned list.
 
 ## [0.1.0] - 2026-09-23
 

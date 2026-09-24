@@ -9,6 +9,7 @@ import express, { type RequestHandler } from 'express';
 import path from 'path';
 import type { AddressInfo } from 'net';
 import { app as apiApp, ensureLocalDirs } from '../server/index.ts';
+import { whenWritesIdle } from '../server/lib/safe-write.ts';
 
 const HOST = '127.0.0.1';
 
@@ -24,6 +25,8 @@ export interface EmbeddedServerOptions {
 export interface EmbeddedServer {
   url: string;
   close(): Promise<void>;
+  /** Resolves once no file write is in progress, or after timeoutMs (false then) */
+  whenWritesIdle(timeoutMs: number): Promise<boolean>;
 }
 
 /**
@@ -80,5 +83,6 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions = {}): 
         server.closeAllConnections();
         server.close(() => resolve());
       }),
+    whenWritesIdle,
   };
 }

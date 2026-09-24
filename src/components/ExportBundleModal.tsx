@@ -129,8 +129,8 @@ export function ExportBundleModal({
             <span className="option-label">Labels</span>
             <span className="option-desc">
               {isSelectionExport
-                ? 'Label artwork for selected cartridges'
-                : 'All cartridge label artwork (labels.db)'
+                ? 'Label artwork and custom names for selected cartridges'
+                : 'All cartridge label artwork (labels.db) and custom names'
               }
             </span>
           </div>
@@ -147,8 +147,8 @@ export function ExportBundleModal({
             <span className="option-label">Settings</span>
             <span className="option-desc">
               {isSelectionExport
-                ? 'Display and hardware settings for selected cartridges'
-                : 'Per-game display and hardware settings'
+                ? 'Display and hardware settings, and library details, for selected cartridges'
+                : 'Per-game display and hardware settings, and library details'
               }
             </span>
           </div>

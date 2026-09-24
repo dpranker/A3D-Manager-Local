@@ -2,8 +2,9 @@ import { readFile, stat, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { createHash, randomUUID } from 'crypto';
-import { findGameFolder, ensureLocalGameFolder, getLocalGamesDir } from './cartridge-settings.js';
+import { findGameFolder, ensureLocalGameFolder, ensureSdGameFolder, getLocalGamesDir } from './cartridge-settings.js';
 import { copyFileAtomic, updateJsonFile, writeFileAtomic } from './safe-write.js';
+import { cardResultFrom, type CardResult } from './card-result.js';
 
 // =============================================================================
 // Constants
@@ -352,7 +353,8 @@ export async function saveLocalGamePak(
   const folderPath = await ensureLocalGameFolder(cartId, title);
   const gamePakPath = path.join(folderPath, GAME_PAK_FILENAME);
 
-  // The save being replaced is kept as controller_pak.img.bak
+  await backupBeforeReplacing(cartId, gamePakPath, buffer, 'local save before it was replaced');
+  // The save being replaced is also kept as controller_pak.img.bak
   await writeFileAtomic(gamePakPath, buffer, { keepBackup: true });
 
   return gamePakPath;
@@ -382,6 +384,7 @@ export async function downloadGamePakFromSD(
     const folderPath = await ensureLocalGameFolder(cartId, title);
     const localPath = path.join(folderPath, GAME_PAK_FILENAME);
 
+    await backupBeforeReplacing(cartId, localPath, sdGamePakPath, 'local save before downloading from the SD card');
     await copyFileAtomic(sdGamePakPath, localPath, { keepBackup: true });
 
     return { success: true, path: localPath };
@@ -413,7 +416,6 @@ export async function deleteLocalGamePak(cartId: string): Promise<boolean> {
 export async function uploadGamePakToSD(
   cartId: string,
   sdCardPath: string,
-  title: string = 'Unknown Cartridge'
 ): Promise<{ success: boolean; path?: string; error?: string }> {
   // Get local game pak
   const localPath = await getLocalGamePakPath(cartId);
@@ -428,20 +430,12 @@ export async function uploadGamePakToSD(
     return { success: false, error: `Invalid game pak: ${validation.errors.join(', ')}` };
   }
 
-  // Find or determine SD game folder
-  const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
-  let sdGameFolder = await findGameFolder(gamesDir, cartId);
-
-  if (!sdGameFolder) {
-    // Need to create the folder
-    const normalizedId = cartId.toLowerCase();
-    const folderName = `${title} ${normalizedId}`;
-    sdGameFolder = path.join(gamesDir, folderName);
-    await mkdir(sdGameFolder, { recursive: true });
-  }
-
   try {
+    // Named from the cart database like other uploads, not from the display title
+    const sdGameFolder = await ensureSdGameFolder(sdCardPath, cartId);
     const sdGamePakPath = path.join(sdGameFolder, GAME_PAK_FILENAME);
+    // The card's save is kept in the local backup list, not on the card
+    await backupBeforeReplacing(cartId, sdGamePakPath, localPath, 'SD card save before uploading');
     // Atomic only: nothing extra is left in the console's game folder
     await copyFileAtomic(localPath, sdGamePakPath);
     return { success: true, path: sdGamePakPath };
@@ -635,16 +629,25 @@ export async function createBackup(
   if (!localBuffer) {
     throw new Error('No local game pak to backup');
   }
+  return addBackup(cartId, localBuffer, name, description);
+}
 
+/** Store buffer as a new backup of the cartridge's Controller Pak */
+async function addBackup(
+  cartId: string,
+  buffer: Buffer,
+  name?: string,
+  description?: string
+): Promise<GamePakBackup> {
   // Validate the buffer
-  const validation = validateGamePak(localBuffer);
+  const validation = validateGamePak(buffer);
   if (!validation.valid) {
     throw new Error(`Invalid game pak: ${validation.errors.join(', ')}`);
   }
 
   // Generate backup ID and hash
   const id = randomUUID();
-  const md5Hash = computeGamePakHash(localBuffer);
+  const md5Hash = computeGamePakHash(buffer);
   const createdAt = new Date().toISOString();
 
   // Create backup entry
@@ -654,7 +657,7 @@ export async function createBackup(
     description,
     createdAt,
     md5Hash,
-    size: localBuffer.length,
+    size: buffer.length,
   };
 
   // Ensure backups directory exists
@@ -663,7 +666,7 @@ export async function createBackup(
 
   // Write backup file
   const backupPath = path.join(backupsDir, `${id}.img`);
-  await writeFileAtomic(backupPath, localBuffer);
+  await writeFileAtomic(backupPath, buffer);
 
   // Update metadata
   await mutateBackupsMetadata(cartId, (metadata) => {
@@ -671,6 +674,29 @@ export async function createBackup(
   });
 
   return backup;
+}
+
+/**
+ * Before a Controller Pak save is replaced (locally or on the card), keep the one
+ * being replaced in the backup list. Skipped when it's the same as the new save,
+ * already backed up (same MD5), missing, or not a valid Controller Pak.
+ */
+export async function backupBeforeReplacing(
+  cartId: string,
+  existingPath: string | null,
+  replacement: Buffer | string,
+  what: string,
+): Promise<GamePakBackup | null> {
+  if (!existingPath || !existsSync(existingPath)) return null;
+  const existing = await readFile(existingPath);
+  const incoming = typeof replacement === 'string' ? await readFile(replacement) : replacement;
+  if (existing.equals(incoming) || !validateGamePak(existing).valid) return null;
+
+  const md5Hash = computeGamePakHash(existing);
+  if ((await listBackups(cartId)).some((b) => b.md5Hash === md5Hash)) return null;
+
+  const date = new Date().toISOString().split('T')[0];
+  return addBackup(cartId, existing, `Automatic: ${what} ${date}`, 'Kept automatically before it was replaced');
 }
 
 /**
@@ -750,7 +776,7 @@ export async function restoreBackup(
   backupId: string,
   title: string = 'Unknown Cartridge',
   sdCardPath?: string
-): Promise<{ local: boolean; sd: boolean }> {
+): Promise<{ local: boolean; sd: CardResult }> {
   const backupBuffer = await getBackupBuffer(cartId, backupId);
   if (!backupBuffer) {
     throw new Error('Backup not found');
@@ -764,15 +790,9 @@ export async function restoreBackup(
 
   // Restore to local
   await saveLocalGamePak(cartId, backupBuffer, title);
-  const result = { local: true, sd: false };
 
   // Optionally restore to SD card
-  if (sdCardPath) {
-    const sdResult = await uploadGamePakToSD(cartId, sdCardPath, title);
-    result.sd = sdResult.success;
-  }
-
-  return result;
+  return { local: true, sd: cardResultFrom(sdCardPath ? await uploadGamePakToSD(cartId, sdCardPath) : null) };
 }
 
 /**

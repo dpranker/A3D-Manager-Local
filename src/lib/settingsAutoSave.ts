@@ -1,132 +1,175 @@
 /**
  * Settings Auto-Save Manager
  *
- * Manages automatic saving of cartridge settings with debouncing.
- * Saves are queued and executed after n seconds of inactivity per cartridge.
- * Multiple cartridges can have pending saves simultaneously.
+ * Saves cartridge settings a couple of seconds after the last change, per cartridge.
+ *
+ * - One save at a time per cartridge: a change made while a save is running is
+ *   saved after it, never alongside it.
+ * - A failed save keeps its change: it's retried with the next change, by
+ *   retrySave, or when saves are flushed.
+ * - cancelPendingSave drops a queued change the user has undone.
+ * - flushPendingSaves sends everything now and resolves when done. The desktop app
+ *   calls it before quitting; the browser build calls it on unload.
  */
 
 import type { CartridgeSettings } from './defaultSettings';
+import { getDesktopBridge } from '../desktop/bridge';
 
-interface PendingSave {
-  cartId: string;
-  settings: CartridgeSettings;
-  sdCardPath?: string;
-  timeoutId: number;
+export type SaveStatus = 'pending' | 'saving' | 'saved' | 'error';
+
+interface CartSaveState {
+  /** Change waiting to be saved (null when nothing is waiting) */
+  pending: { settings: CartridgeSettings; sdCardPath?: string } | null;
+  timeoutId: number | null;
+  /** The save running now, if any */
+  running: Promise<void> | null;
 }
 
-interface SaveResult {
-  success: boolean;
-  error?: string;
-}
-
-type SaveStatusListener = (cartId: string, status: 'pending' | 'saving' | 'saved' | 'error', error?: string) => void;
+/**
+ * status: what happened. savedJson: on 'saved', the settings that were written, so
+ * an editor can compare its state with what's actually on disk.
+ */
+type SaveStatusListener = (cartId: string, status: SaveStatus, error?: string, savedJson?: string) => void;
 
 const SAVE_DELAY_MS = 2000; // 2 seconds
 
 // Singleton state
-const pendingSaves = new Map<string, PendingSave>();
+const carts = new Map<string, CartSaveState>();
 const saveListeners = new Set<SaveStatusListener>();
 
+function stateFor(cartId: string): CartSaveState {
+  let state = carts.get(cartId);
+  if (!state) {
+    state = { pending: null, timeoutId: null, running: null };
+    carts.set(cartId, state);
+  }
+  return state;
+}
+
+function clearTimer(state: CartSaveState): void {
+  if (state.timeoutId !== null) {
+    window.clearTimeout(state.timeoutId);
+    state.timeoutId = null;
+  }
+}
+
 /**
- * Queue a settings save for a cartridge.
- * If a save is already pending for this cartridge, it will be replaced.
- * The save will execute after SAVE_DELAY_MS of no new changes.
+ * Queue a settings save for a cartridge. Replaces any change still waiting and
+ * restarts the delay.
  */
 export function queueSettingsSave(
   cartId: string,
   settings: CartridgeSettings,
   sdCardPath?: string
 ): void {
-  // Clear existing timeout for this cartridge
-  const existing = pendingSaves.get(cartId);
-  if (existing?.timeoutId) {
-    window.clearTimeout(existing.timeoutId);
-  }
-
-  // Log pending save
-  console.log(`[Settings] Unsaved changes for ${cartId}`);
-
-  // Notify listeners of pending save
+  const state = stateFor(cartId);
+  clearTimer(state);
+  state.pending = { settings, sdCardPath };
   notifyListeners(cartId, 'pending');
-
-  // Queue new save with delay
-  const timeoutId = window.setTimeout(() => {
-    executeSave(cartId);
+  state.timeoutId = window.setTimeout(() => {
+    state.timeoutId = null;
+    void runSave(cartId);
   }, SAVE_DELAY_MS);
+}
 
-  pendingSaves.set(cartId, {
-    cartId,
-    settings,
-    sdCardPath,
-    timeoutId,
-  });
+/** Drop a change that's still waiting (the user undid it). A save already running isn't stopped. */
+export function cancelPendingSave(cartId: string): void {
+  const state = carts.get(cartId);
+  if (!state?.pending) return;
+  clearTimer(state);
+  state.pending = null;
+  if (!state.running) notifyListeners(cartId, 'saved');
+}
+
+/** Save a failed (or waiting) change now */
+export function retrySave(cartId: string): Promise<void> {
+  const state = carts.get(cartId);
+  if (!state?.pending) return Promise.resolve();
+  clearTimer(state);
+  return runSave(cartId);
+}
+
+/** Whether any cartridge has a change waiting or a save running */
+export function hasPendingSaves(): boolean {
+  for (const state of carts.values()) {
+    if (state.pending || state.running) return true;
+  }
+  return false;
 }
 
 /**
- * Execute the save for a specific cartridge.
- * Called automatically after the debounce delay.
+ * Save the cartridge's waiting change, after any save already running for it.
+ * Resolves when nothing is left to save for this cartridge (or the save failed).
  */
-async function executeSave(cartId: string): Promise<SaveResult> {
-  const pending = pendingSaves.get(cartId);
-  if (!pending) {
-    return { success: false, error: 'No pending save found' };
+async function runSave(cartId: string): Promise<void> {
+  const state = stateFor(cartId);
+  while (state.running) {
+    await state.running;
   }
+  const job = state.pending;
+  if (!job) return;
+  state.pending = null;
 
-  // Remove from pending before saving
-  pendingSaves.delete(cartId);
-
-  // Notify listeners that save is in progress
+  const running = saveOnce(cartId, job).then(
+    () => {
+      notifyListeners(cartId, 'saved', undefined, JSON.stringify(job.settings));
+    },
+    (err: unknown) => {
+      // Keep the change unless a newer one has replaced it
+      if (!state.pending) state.pending = job;
+      const message = err instanceof Error ? err.message : 'Save failed';
+      console.error(`Auto-save failed for ${cartId}:`, message);
+      notifyListeners(cartId, 'error', message);
+    },
+  );
+  state.running = running;
   notifyListeners(cartId, 'saving');
-
   try {
-    // Save to local
-    const localResponse = await fetch(`/api/cartridges/${cartId}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pending.settings),
-    });
-
-    if (!localResponse.ok) {
-      const data = await localResponse.json();
-      throw new Error(data.error || 'Failed to save local settings');
-    }
-
-    // If SD card connected, also save there
-    if (pending.sdCardPath) {
-      const sdResponse = await fetch(`/api/cartridges/${cartId}/settings/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sdCardPath: pending.sdCardPath }),
-      });
-
-      if (!sdResponse.ok) {
-        const data = await sdResponse.json();
-        throw new Error(data.error || 'Failed to sync to SD card');
-      }
-    }
-
-    // Notify success
-    console.log(`[Settings] Saved ${cartId}${pending.sdCardPath ? ' + SD card' : ''}`);
-    notifyListeners(cartId, 'saved');
-    return { success: true };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Save failed';
-    notifyListeners(cartId, 'error', errorMessage);
-    console.error(`Auto-save failed for ${cartId}:`, errorMessage);
-    return { success: false, error: errorMessage };
+    await running;
+  } finally {
+    if (state.running === running) state.running = null;
   }
+  // A change made during the save has its own timer; nothing more to do here
 }
 
-/**
- * Force immediate save of all pending settings.
- * Useful when the app is closing or user navigates away.
- */
-export function flushPendingSaves(): void {
-  for (const [cartId, pending] of pendingSaves) {
-    window.clearTimeout(pending.timeoutId);
-    executeSave(cartId);
+async function saveOnce(cartId: string, job: NonNullable<CartSaveState['pending']>): Promise<void> {
+  // keepalive lets the request finish if the page unloads mid-save (browser build)
+  const localResponse = await fetch(`/api/cartridges/${cartId}/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(job.settings),
+    keepalive: true,
+  });
+  if (!localResponse.ok) {
+    const data = await localResponse.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to save local settings');
   }
+
+  // If SD card connected, also save there
+  if (job.sdCardPath) {
+    const sdResponse = await fetch(`/api/cartridges/${cartId}/settings/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sdCardPath: job.sdCardPath }),
+      keepalive: true,
+    });
+    if (!sdResponse.ok) {
+      const data = await sdResponse.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to sync to SD card');
+    }
+  }
+  console.log(`[Settings] Saved ${cartId}${job.sdCardPath ? ' + SD card' : ''}`);
+}
+
+/** Save every waiting change now; resolves when all saves (including running ones) are done */
+export async function flushPendingSaves(): Promise<void> {
+  const saves: Promise<void>[] = [];
+  for (const [cartId, state] of carts) {
+    clearTimer(state);
+    if (state.pending) saves.push(runSave(cartId));
+    else if (state.running) saves.push(state.running);
+  }
+  await Promise.all(saves);
 }
 
 /**
@@ -140,23 +183,21 @@ export function onSaveStatus(listener: SaveStatusListener): () => void {
   };
 }
 
-function notifyListeners(
-  cartId: string,
-  status: 'pending' | 'saving' | 'saved' | 'error',
-  error?: string
-): void {
+function notifyListeners(cartId: string, status: SaveStatus, error?: string, savedJson?: string): void {
   for (const listener of saveListeners) {
     try {
-      listener(cartId, status, error);
+      listener(cartId, status, error, savedJson);
     } catch (err) {
       console.error('Save status listener error:', err);
     }
   }
 }
 
-// Flush pending saves when the page is about to unload
 if (typeof window !== 'undefined') {
+  // Desktop app: the main process asks for this before quitting and waits for it
+  getDesktopBridge()?.onFlushSaves(flushPendingSaves);
+  // Browser build: can't wait, but keepalive lets the requests finish after unload
   window.addEventListener('beforeunload', () => {
-    flushPendingSaves();
+    void flushPendingSaves();
   });
 }

@@ -201,7 +201,16 @@ export function SettingsPage() {
         body: JSON.stringify({ sdCardPath: selectedSDCard.path, cartIds: [...selectedOrphanIds] }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Could not remove orphaned cartridges');
+      if (!response.ok) {
+        // Some folders may have been deleted before the failure: take them off the list
+        const deleted = new Set<string>(result.deletedFolders ?? []);
+        if (deleted.size) {
+          setOrphanCandidates((prev) => prev?.filter((c) => !deleted.has(c.folderName)) ?? null);
+          setSelectedOrphanIds((prev) => new Set([...prev].filter((id) => !orphanCandidates?.some((c) => c.cartId === id && deleted.has(c.folderName)))));
+          await fetchLocalDataStatus();
+        }
+        throw new Error(result.error || 'Could not remove orphaned cartridges');
+      }
       setOrphanCandidates(null);
       await fetchLocalDataStatus();
     } catch (error) {
@@ -218,7 +227,8 @@ export function SettingsPage() {
     setDetailedResult(null);
 
     try {
-      const response = await fetch('/api/labels/compare/quick');
+      if (!selectedSDCard) throw new Error('No SD card selected');
+      const response = await fetch(`/api/labels/compare/quick?sdCardPath=${encodeURIComponent(selectedSDCard.path)}`);
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Comparison failed');
@@ -238,7 +248,9 @@ export function SettingsPage() {
     setDetailedResult(null);
 
     try {
-      const response = await fetch(`/api/labels/compare/detailed?fullHash=${fullHash}`);
+      if (!selectedSDCard) throw new Error('No SD card selected');
+      const params = new URLSearchParams({ sdCardPath: selectedSDCard.path, fullHash: String(fullHash) });
+      const response = await fetch(`/api/labels/compare/detailed?${params}`);
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Comparison failed');
@@ -830,6 +842,8 @@ export function SettingsPage() {
           )}
         </section>
 
+        {/* Development only: the benchmark writes test files to the card, and its routes exist only in dev */}
+        {import.meta.env.DEV && (
         <section className="settings-section">
           <h2>Debug Benchmark</h2>
           <p>
@@ -955,6 +969,7 @@ export function SettingsPage() {
             </div>
           )}
         </section>
+        )}
 
         <section className="settings-section">
           <h2>Chunk Size Benchmark</h2>
