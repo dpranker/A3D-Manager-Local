@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/dpranker/A3D-Manager-Local/actions/workflows/ci.yml/badge.svg)
 
-**A3D Manager Local** is a fork of [TheLeggett/A3D-Manager](https://github.com/TheLeggett/A3D-Manager) that adds a desktop app (Electron, Linux AppImage and Windows installer), 3D<sup>os</sup> firmware updates, support for the 3D<sup>os</sup> 1.5.1 `settings.json` format, a `library.json` editor for unknown cartridges, and cartridge colors. It keeps upstream's history and stays mergeable with it; all credit for the original app goes to its authors.
+**A3D Manager Local** is a fork of [TheLeggett/A3D-Manager](https://github.com/TheLeggett/A3D-Manager) that adds a desktop app (Electron, Linux AppImage, Windows installer and portable .exe), 3D<sup>os</sup> firmware updates, support for the 3D<sup>os</sup> 1.5.1 `settings.json` format, a `library.json` editor for unknown cartridges, and cartridge colors. It keeps upstream's history and stays mergeable with it; all credit for the original app goes to its authors.
 
 **The unofficial companion app for managing your Analogue 3D N64 cartridge collection.**
 
@@ -134,7 +134,7 @@ Flexible backup and sharing options:
 The desktop app runs everything locally: no browser tab, no server to start, and a native SD card picker. It doesn't need Node.js.
 
 - **Linux:** download the `.AppImage` from the [Releases page](https://github.com/dpranker/A3D-Manager-Local/releases), make it executable (`chmod +x A3D-Manager-Local-*.AppImage`) and run it. Some distributions need `libfuse2` installed to run AppImages. To get a menu entry with the app icon, integrate it with [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) or [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher). On Ubuntu 24.04 and later, Electron's sandbox is blocked by default; if the app doesn't start, run it with `--no-sandbox`.
-- **Windows:** download and run the `Setup .exe` from the Releases page. The installer isn't code-signed yet, so SmartScreen warns on first run (More info → Run anyway).
+- **Windows:** download `…-installer.exe` from the Releases page to install it, or `…-portable.exe` to run it without installing. Both use the same data, so you can switch between them. Neither is code-signed yet, so SmartScreen warns on first run (More info → Run anyway).
 - **SD card:** the app finds cards mounted under `/run/media/<user>` or `/media/<user>` (Linux) and `/Volumes` (macOS) automatically; otherwise click **Choose SD Card…** in the header and pick the card (the folder containing `Library/N64`) or the folder it's mounted under. The choice is remembered.
 - **Data location:** `~/.config/A3D Manager/workspace/` (Linux), `%APPDATA%\A3D Manager\workspace\` (Windows) or `~/Library/Application Support/A3D Manager/workspace/` (macOS).
 
@@ -156,7 +156,7 @@ npm install
 npm run electron:dev
 ```
 
-Build the desktop app with `npm run electron:build`: it packages for the current OS into `release/` (Linux: AppImage; Windows: NSIS installer). Each platform has to be built on that OS, because sharp's native binary is platform-specific. The macOS (`dmg`) target is configured in `electron-builder.yml` but isn't built or tested.
+Build the desktop app with `npm run electron:build`: it packages for the current OS into `release/` (Linux: AppImage; Windows: installer and portable .exe). Each platform has to be built on that OS, because sharp's native binary is platform-specific. The macOS (`dmg`) target is configured in `electron-builder.yml` but isn't built or tested.
 
 In development the app keeps its data in the repo's `.local/` folder; the packaged app uses its own data folder.
 
@@ -164,7 +164,7 @@ The Electron code lives in `electron/` (main process, preload, embedded server, 
 
 ### Releases
 
-Pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`: it builds the Linux AppImage and Windows installer on their own runners, smoke-tests both, and attaches them to a draft GitHub release to review and publish. The version comes from the tag. Add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md) before tagging; it becomes the release notes.
+Pushing a tag like `v1.2.0` (or `v1.2.0-rc.1` for a pre-release) runs `.github/workflows/release.yml`: it builds the Linux AppImage and the Windows installer and portable .exe on their own runners, smoke-tests both, and attaches them to a draft GitHub release to review and publish. The version comes from the tag. Add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md) before tagging; it becomes the release notes.
 
 ### Connecting Your SD Card
 

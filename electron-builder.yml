@@ -42,7 +42,17 @@ linux:
   category: Utility
 
 win:
-  target: nsis
+  # Installer, plus a portable .exe that runs without installing (both use the same
+  # data folder in %APPDATA%, so switching between them keeps everything)
+  target:
+    - nsis
+    - portable
+
+nsis:
+  artifactName: A3D-Manager-Local-${version}-${arch}-installer.${ext}
+
+portable:
+  artifactName: A3D-Manager-Local-${version}-${arch}-portable.${ext}
 
 mac:
   target: dmg
