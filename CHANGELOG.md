@@ -27,6 +27,9 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **"Labels Synced" checks the SD card you selected**, not whichever card was detected first, and a result for a previously selected card is ignored.
 - **Copying a Controller Pak save to a card without that game's folder** no longer fails for titles with characters the card can't store (such as `:`). New card folders are named the same way for settings, `library.json` and Controller Pak saves.
 - The app rejects any SD card path that isn't an Analogue 3D card, for every card operation.
+- **Settings changes aren't lost when you quit.** Closing the desktop app first sends any settings change still waiting to be saved, and lets file transfers in progress finish (each with a time limit).
+- **Undoing a settings change within two seconds no longer saves the change.** Before, switching a setting and switching it back left the first change queued, and it was saved anyway.
+- **A failed settings save is kept and can be retried.** The Settings tab shows when changes are unsaved or saving, and a Retry button when a save fails. Saves for one cartridge no longer run at the same time.
 
 ## [0.1.0] - 2026-09-23
 

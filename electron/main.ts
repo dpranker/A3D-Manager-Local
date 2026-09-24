@@ -24,6 +24,14 @@ app.setPath('userData', path.join(app.getPath('appData'), APP_NAME));
 
 let mainWindow: BrowserWindow | null = null;
 let server: EmbeddedServer | null = null;
+/** Set once pending saves and writes are done, so the next quit goes through */
+let readyToQuit = false;
+let finishingWork: Promise<void> | null = null;
+
+// How long quitting waits for the window's queued saves, then for writes in progress
+// (a labels.db sync to a slow card takes several seconds)
+const FLUSH_SAVES_TIMEOUT_MS = 5_000;
+const WRITES_TIMEOUT_MS = 30_000;
 let appOrigin = '';
 const sdCardLocation = new SDCardLocation(app.getPath('userData'));
 
@@ -96,6 +104,13 @@ function createWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show());
 
+  // Closing the window quits the app: hold it until saves and writes are done
+  win.on('close', (event) => {
+    if (readyToQuit) return;
+    event.preventDefault();
+    quitWhenDone();
+  });
+
   // Keep the window on the app; anything else (e.g. help links) opens in the system browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!isOwnOrigin(url)) openExternally(url);
@@ -110,6 +125,44 @@ function createWindow(): BrowserWindow {
 
   void win.loadURL(devServerUrl ?? server!.url);
   return win;
+}
+
+/** Ask the window to send its queued settings saves, and wait until it has (or times out) */
+function flushWindowSaves(): Promise<void> {
+  const win = mainWindow;
+  if (!win || win.isDestroyed() || win.webContents.isCrashed()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const requestId = Date.now();
+    const finish = () => {
+      clearTimeout(timer);
+      ipcMain.removeListener(IPC_CHANNELS.flushSavesDone, onDone);
+      resolve();
+    };
+    const onDone = (event: Electron.IpcMainEvent, id: unknown) => {
+      if (id === requestId && event.sender === win.webContents) finish();
+    };
+    const timer = setTimeout(() => {
+      console.warn('Quitting without confirmation that queued saves were sent');
+      finish();
+    }, FLUSH_SAVES_TIMEOUT_MS);
+    ipcMain.on(IPC_CHANNELS.flushSavesDone, onDone);
+    win.webContents.send(IPC_CHANNELS.flushSaves, requestId);
+  });
+}
+
+/** Finish pending work (queued saves, then writes in progress), then quit */
+function quitWhenDone(): void {
+  finishingWork ??= (async () => {
+    try {
+      await flushWindowSaves();
+      if (server && !(await server.whenWritesIdle(WRITES_TIMEOUT_MS))) {
+        console.warn('Quitting while a file write is still in progress');
+      }
+    } finally {
+      readyToQuit = true;
+      app.quit();
+    }
+  })();
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
@@ -165,8 +218,15 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => app.quit());
 
-  // Nothing to flush: stop accepting requests and let process exit drop the sockets
-  // (deferring quit here would hang signal-initiated shutdowns)
+  // Quitting (menu, Ctrl+Q, signals) first sends queued saves and lets writes finish,
+  // each with a timeout so a stuck card can't hang shutdown
+  app.on('before-quit', (event) => {
+    if (readyToQuit) return;
+    event.preventDefault();
+    quitWhenDone();
+  });
+
+  // Everything is flushed by now: stop accepting requests and let process exit drop the sockets
   app.on('will-quit', () => {
     void server?.close();
     server = null;

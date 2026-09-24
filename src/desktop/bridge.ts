@@ -14,6 +14,11 @@ export interface DesktopBridge {
   getSDCardPath(): Promise<string | null>;
   /** Open a native folder picker and, if the choice is valid, start using it */
   chooseSDCard(): Promise<ChooseSDCardResult>;
+  /**
+   * Register what to run when the app is about to quit (sending queued saves).
+   * The main process waits for the returned promise, up to a timeout.
+   */
+  onFlushSaves(handler: () => Promise<void>): void;
 }
 
 export const DESKTOP_BRIDGE_KEY = 'a3dDesktop';
@@ -21,6 +26,10 @@ export const DESKTOP_BRIDGE_KEY = 'a3dDesktop';
 export const IPC_CHANNELS = {
   getSDCardPath: 'a3d:get-sd-card-path',
   chooseSDCard: 'a3d:choose-sd-card',
+  /** main -> renderer: send queued saves now (payload: request id) */
+  flushSaves: 'a3d:flush-saves',
+  /** renderer -> main: done (payload: the same request id) */
+  flushSavesDone: 'a3d:flush-saves-done',
 } as const;
 
 export function getDesktopBridge(): DesktopBridge | null {

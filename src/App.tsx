@@ -83,7 +83,8 @@ function SDCardProvider({ children }: { children: React.ReactNode }) {
       }
       const response = await fetch('/api/sync/sd-cards');
       if (!response.ok) throw new Error('Failed to detect SD cards');
-      const data: SDCard[] = await response.json();
+      const data: unknown = await response.json();
+      if (!Array.isArray(data)) throw new Error('Unexpected SD card list');
 
       setSDCards(prevCards => {
         // Check if the cards have actually changed
@@ -92,7 +93,7 @@ function SDCardProvider({ children }: { children: React.ReactNode }) {
         if (prevPaths === newPaths) {
           return prevCards; // No change, don't update state
         }
-        return data;
+        return data as SDCard[];
       });
 
       // Check if selected SD card is still available
