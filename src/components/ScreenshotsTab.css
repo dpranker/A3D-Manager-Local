@@ -1,0 +1,227 @@
+.screenshots-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.screenshots-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.screenshots-toolbar-count {
+  margin-right: auto;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.screenshots-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.screenshots-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.screenshots-section-header h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.screenshots-count {
+  margin-left: 0.25rem;
+  color: var(--color-text-subtle);
+}
+
+.screenshots-section-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-subtle);
+}
+
+.screenshots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.screenshots-grid--wide {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.screenshot-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.screenshot-thumb img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: fill;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  transition: border-color 0.15s;
+}
+
+.screenshot-thumb img.wide {
+  aspect-ratio: 16 / 9;
+}
+
+.screenshot-thumb:hover img,
+.screenshot-thumb:focus-visible img {
+  border-color: var(--color-text-muted);
+}
+
+.screenshot-thumb:focus-visible {
+  outline: none;
+}
+
+.screenshot-thumb.selected img {
+  border-color: var(--color-accent);
+}
+
+.screenshot-check {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ffffff;
+  border-radius: 4px;
+  background: #000000;
+}
+
+.screenshot-thumb.selected .screenshot-check {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.screenshot-thumb.selected .screenshot-check::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  width: 5px;
+  height: 10px;
+  border: solid #000000;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.screenshot-hdr {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.screenshot-date {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* Full-size viewer */
+.screenshot-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+.screenshot-viewer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(100%, 1100px);
+  max-height: 100%;
+}
+
+.screenshot-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.screenshot-viewer-body img {
+  width: 100%;
+  max-height: calc(100vh - 12rem);
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: #000000;
+}
+
+/* Console captures are 4:3 whatever their pixel size (e.g. 640x240), so stretch them to it */
+.screenshot-viewer-body img.console {
+  aspect-ratio: 4 / 3;
+  height: min(calc(100vh - 12rem), calc(min(100vw - 3rem, 1100px) * 3 / 4));
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  object-fit: fill;
+  image-rendering: pixelated;
+}
+
+.screenshot-viewer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.screenshot-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: 0;
+}
+
+.screenshot-meta dt {
+  font-size: 0.7rem;
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.screenshot-meta dd {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.screenshot-viewer-actions {
+  display: flex;
+  gap: 0.5rem;
+}

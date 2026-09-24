@@ -6,6 +6,7 @@ import { CartridgeSprite } from './CartridgeSprite';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { useLabelSync } from './LabelSyncIndicator';
 import { LibraryTab } from './LibraryTab';
+import { ScreenshotsTab } from './ScreenshotsTab';
 import { cartridgeShellColor } from '../lib/cartColors';
 import { queueSettingsSave, onSaveStatus } from '../lib/settingsAutoSave';
 import {
@@ -114,7 +115,7 @@ interface GamePakBackup {
   size: number;
 }
 
-type TabId = 'label' | 'settings' | 'gamepak' | 'library';
+type TabId = 'label' | 'settings' | 'gamepak' | 'library' | 'screenshots';
 
 export function CartridgeDetailPanel({
   cartId,
@@ -252,6 +253,12 @@ export function CartridgeDetailPanel({
                 Library
               </button>
             )}
+            <button
+              className={`tab-btn ${activeTab === 'screenshots' ? 'active' : ''}`}
+              onClick={() => setActiveTab('screenshots')}
+            >
+              Screenshots
+            </button>
           </div>
           <div className="ownership-toggle">
             <ToggleSwitch
@@ -301,6 +308,7 @@ export function CartridgeDetailPanel({
               onTitleSaved={handleLibraryTitleSaved}
             />
           )}
+          {activeTab === 'screenshots' && <ScreenshotsTab cartId={cartId} sdCardPath={sdCardPath} />}
         </div>
       </div>
     </div>

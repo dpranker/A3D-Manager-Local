@@ -18,6 +18,7 @@ import { sdCardSuite } from './sd-card/tests.js';
 import { firmwareSuite } from './firmware/tests.js';
 import { libraryJsonSuite } from './library-json/tests.js';
 import { cartDatabaseSuite } from './cart-database/tests.js';
+import { screenshotsSuite } from './screenshots/tests.js';
 
 const verbose = process.argv.includes('--verbose');
 
@@ -83,6 +84,7 @@ async function main() {
 
   // Print summary
   allResults.push(...await runSuite(cartDatabaseSuite));
+  allResults.push(...await runSuite(screenshotsSuite));
   printSummary(allResults);
 
   // Write test artifacts if verbose
