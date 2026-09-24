@@ -13,7 +13,7 @@
 import archiver from 'archiver';
 import AdmZip from 'adm-zip';
 import { existsSync } from 'fs';
-import { readFile, readdir, mkdir, writeFile } from 'fs/promises';
+import { readFile, readdir, mkdir } from 'fs/promises';
 import path from 'path';
 import { Writable } from 'stream';
 import { getLabelsDbImage, updateLabelImage, addCartridge, getAllEntries, createEmptyLabelsDb } from './labels-db-core.js';
@@ -23,6 +23,8 @@ import {
   importBackups,
   type GamePakBackupsMetadata,
 } from './game-pak.js';
+import { mergeOwnedCartridges, type OwnedCartridge } from './owned-carts.js';
+import { withFileLock, writeFileAtomic } from './safe-write.js';
 
 // Paths
 const LOCAL_DIR = path.join(process.cwd(), '.local');
@@ -405,14 +407,11 @@ export async function importBundle(
     if (options.importLabels && bundle.labelsDb) {
       const existingLabels = existsSync(LABELS_DB_PATH);
 
-      if (!existingLabels || options.mergeStrategy === 'overwrite') {
-        await writeFile(LABELS_DB_PATH, bundle.labelsDb);
-        result.labelsImported = true;
-      } else if (options.mergeStrategy === 'skip') {
-        // Skip - labels already exist
-      } else {
-        // keep-both - for labels.db, we'll just overwrite since merging is complex
-        await writeFile(LABELS_DB_PATH, bundle.labelsDb);
+      if (!existingLabels || options.mergeStrategy !== 'skip') {
+        // keep-both is treated as overwrite, since merging is complex. The database
+        // being replaced is kept as labels.db.bak.
+        const labelsDb = bundle.labelsDb;
+        await withFileLock(LABELS_DB_PATH, () => writeFileAtomic(LABELS_DB_PATH, labelsDb, { keepBackup: true }));
         result.labelsImported = true;
       }
     }
@@ -421,8 +420,7 @@ export async function importBundle(
     if (options.importLabels && bundle.labels.size > 0) {
       // Create empty labels.db if it doesn't exist
       if (!existsSync(LABELS_DB_PATH)) {
-        const emptyDb = createEmptyLabelsDb();
-        await writeFile(LABELS_DB_PATH, emptyDb);
+        await withFileLock(LABELS_DB_PATH, () => writeFileAtomic(LABELS_DB_PATH, createEmptyLabelsDb()));
       }
 
       // Get existing cart IDs to check if we're adding or updating
@@ -451,33 +449,9 @@ export async function importBundle(
 
     // Import ownership
     if (options.importOwnership && bundle.ownedCarts) {
-      let existingOwned: { version: number; cartridges: Array<{ cartId: string; addedAt: string; source: string }> } = {
-        version: 1,
-        cartridges: [],
-      };
-
-      if (existsSync(OWNED_CARTS_PATH)) {
-        const content = await readFile(OWNED_CARTS_PATH, 'utf8');
-        existingOwned = JSON.parse(content);
-      }
-
-      const existingIds = new Set(existingOwned.cartridges.map(c => c.cartId.toLowerCase()));
-
-      for (const cart of bundle.ownedCarts.cartridges) {
-        const normalizedId = cart.cartId.toLowerCase();
-        if (existingIds.has(normalizedId)) {
-          result.ownershipMerged.skipped++;
-        } else {
-          existingOwned.cartridges.push({
-            ...cart,
-            cartId: normalizedId,
-          });
-          existingIds.add(normalizedId);
-          result.ownershipMerged.added++;
-        }
-      }
-
-      await writeFile(OWNED_CARTS_PATH, JSON.stringify(existingOwned, null, 2));
+      const merged = await mergeOwnedCartridges(bundle.ownedCarts.cartridges as OwnedCartridge[]);
+      result.ownershipMerged.added += merged.added;
+      result.ownershipMerged.skipped += merged.skipped;
     }
 
     // Import settings
@@ -501,10 +475,10 @@ export async function importBundle(
         const exists = existsSync(settingsPath);
 
         if (!exists) {
-          await writeFile(settingsPath, serializeSettings(settings));
+          await writeFileAtomic(settingsPath, serializeSettings(settings));
           result.settingsImported.added++;
         } else if (options.mergeStrategy === 'overwrite') {
-          await writeFile(settingsPath, serializeSettings(settings));
+          await writeFileAtomic(settingsPath, serializeSettings(settings));
           result.settingsImported.overwritten++;
         } else if (options.mergeStrategy === 'skip') {
           result.settingsImported.skipped++;
@@ -532,10 +506,11 @@ export async function importBundle(
         const exists = existsSync(pakPath);
 
         if (!exists) {
-          await writeFile(pakPath, pakBuffer);
+          await writeFileAtomic(pakPath, pakBuffer);
           result.gamePaksImported.added++;
         } else if (options.mergeStrategy === 'overwrite') {
-          await writeFile(pakPath, pakBuffer);
+          // The save being replaced is kept as controller_pak.img.bak
+          await writeFileAtomic(pakPath, pakBuffer, { keepBackup: true });
           result.gamePaksImported.overwritten++;
         } else if (options.mergeStrategy === 'skip') {
           result.gamePaksImported.skipped++;

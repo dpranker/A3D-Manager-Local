@@ -1,8 +1,8 @@
 import { readdir, stat, access, constants } from 'fs/promises';
 import { statSync } from 'fs';
 import path from 'path';
+import { copyFileAtomic, withFileLock } from './safe-write.js';
 import {
-  copyFileWithProgress,
   copyDirWithProgress,
   type ProgressCallback,
   type BatchProgressCallback,
@@ -140,8 +140,12 @@ export async function exportLabelsToSDWithProgress(
   const data = await readFile(localPath);
   const db = parseLabelsDb(data);
 
-  // Copy with progress - use 50ms throttle for smoother updates
-  await copyFileWithProgress(localPath, sdLabelsPath, onProgress, 50);
+  // Copy with progress - use 50ms throttle for smoother updates. Atomic, so a pulled
+  // card keeps its old labels.db, and the replaced one is kept as labels.db.bak.
+  // The lock keeps label edits from changing the local file mid-copy.
+  await withFileLock(localPath, () =>
+    copyFileAtomic(localPath, sdLabelsPath, { onProgress, throttleMs: 50, keepBackup: true }),
+  );
 
   return {
     entryCount: db.entryCount,

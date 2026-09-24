@@ -11,6 +11,7 @@ import sdCardRouter from './routes/sd-card.js';
 import localDataRouter from './routes/local-data.js';
 import firmwareRouter from './routes/firmware.js';
 import libraryRouter from './routes/library.js';
+import { removeLeftoverPartials } from './lib/safe-write.js';
 import screenshotsRouter from './routes/screenshots.js';
 
 export const app = express();
@@ -25,6 +26,9 @@ export async function ensureLocalDirs() {
   const localPath = path.join(process.cwd(), '.local', 'Library', 'N64');
   await mkdir(path.join(localPath, 'Games'), { recursive: true });
   await mkdir(path.join(localPath, 'Images'), { recursive: true });
+  // Leftovers from writes interrupted by a crash; the files they were replacing are intact
+  const removed = await removeLeftoverPartials(path.join(process.cwd(), '.local'));
+  if (removed.length) console.log(`Removed ${removed.length} unfinished .partial file(s) from interrupted writes`);
 }
 
 // Routes

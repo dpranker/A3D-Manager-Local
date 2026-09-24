@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { readFile, writeFile, unlink, mkdir, stat } from 'fs/promises';
+import { readFile, unlink, mkdir, stat } from 'fs/promises';
 import {
   getLabelsDbStatus,
   getAllLocalLabelsDbEntries,
@@ -17,6 +17,7 @@ import {
   hasLocalLabelsDb,
 } from '../lib/labels-db-core.js';
 import { getOwnedCartIds } from '../lib/owned-carts.js';
+import { CorruptFileError, updateJsonFile } from '../lib/safe-write.js';
 import { detectSDCards } from '../lib/sd-card.js';
 import { compareQuick, compareDetailed } from '../lib/labels-db-compare.js';
 import {
@@ -150,29 +151,45 @@ async function loadUserCarts(): Promise<void> {
   }
 }
 
-async function saveUserCarts(): Promise<void> {
-  const entries = Array.from(userCarts.values());
+const isUserCartEntries = (value: unknown): value is UserCartEntry[] =>
+  Array.isArray(value) && value.every((e) => e && typeof e.id === 'string' && typeof e.name === 'string');
+
+/**
+ * Change user-carts.json: one change at a time, written atomically, starting from the
+ * file (not the in-memory copy). If the file can't be read it's kept as
+ * user-carts.json.corrupt-<time> and the change fails, instead of being overwritten.
+ */
+async function mutateUserCarts<R>(change: (entries: UserCartEntry[]) => R): Promise<R> {
   await mkdir(path.dirname(USER_CARTS_PATH), { recursive: true });
-  await writeFile(USER_CARTS_PATH, JSON.stringify(entries, null, 2));
+  return updateJsonFile(USER_CARTS_PATH, () => [] as UserCartEntry[], (entries) => {
+    const result = change(entries);
+    userCarts = new Map(entries.map(e => [e.id.toLowerCase(), e]));
+    return result;
+  }, isUserCartEntries);
 }
 
-async function addUserCart(id: string, name: string): Promise<UserCartEntry> {
+function addUserCart(id: string, name: string): Promise<UserCartEntry> {
   const entry: UserCartEntry = {
     id: id.toLowerCase(),
     name,
     addedAt: new Date().toISOString(),
   };
-  userCarts.set(entry.id, entry);
-  await saveUserCarts();
-  return entry;
+  return mutateUserCarts((entries) => {
+    const index = entries.findIndex(e => e.id.toLowerCase() === entry.id);
+    if (index >= 0) entries[index] = entry;
+    else entries.push(entry);
+    return entry;
+  });
 }
 
-async function deleteUserCart(id: string): Promise<boolean> {
-  const deleted = userCarts.delete(id.toLowerCase());
-  if (deleted) {
-    await saveUserCarts();
-  }
-  return deleted;
+function deleteUserCart(id: string): Promise<boolean> {
+  const normalizedId = id.toLowerCase();
+  return mutateUserCarts((entries) => {
+    const index = entries.findIndex(e => e.id.toLowerCase() === normalizedId);
+    if (index < 0) return false;
+    entries.splice(index, 1);
+    return true;
+  });
 }
 
 // Load user carts on startup
@@ -503,7 +520,7 @@ router.post('/user-cart/:cartId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding user cart:', error);
-    res.status(500).json({ error: 'Failed to add user cart' });
+    res.status(500).json({ error: error instanceof CorruptFileError ? error.message : 'Failed to add user cart' });
   }
 });
 
@@ -532,7 +549,7 @@ router.delete('/user-cart/:cartId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting user cart:', error);
-    res.status(500).json({ error: 'Failed to delete user cart' });
+    res.status(500).json({ error: error instanceof CorruptFileError ? error.message : 'Failed to delete user cart' });
   }
 });
 

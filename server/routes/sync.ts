@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import path from 'path';
-import { stat, access, constants, mkdir, readdir } from 'fs/promises';
+import { stat, access, constants, mkdir, open, readdir } from 'fs/promises';
 import {
   detectSDCards,
   isValidAnalogueDir,
@@ -11,12 +11,14 @@ import {
   formatBytes,
   formatSpeed,
   formatTime,
-  copyFileWithProgress,
 } from '../lib/file-transfer.js';
+import { copyFileAtomic, withFileLock } from '../lib/safe-write.js';
 import {
   hasLocalLabelsDb,
   getLocalLabelsDbPath,
   getLabelsDbStatus,
+  verifyHeader,
+  HEADER_SIZE,
 } from '../lib/labels-db-core.js';
 
 const router = Router();
@@ -341,12 +343,27 @@ router.get('/labels/download-stream', async (req: Request, res: Response) => {
     // Ensure local directory exists
     await mkdir(path.dirname(localPath), { recursive: true });
 
-    // Copy from SD to local with progress
-    await copyFileWithProgress(
-      sdLabelsPath,
-      localPath,
-      (progress) => sendProgress(formatProgressEvent(progress)),
-      50
+    // Only a valid labels.db may replace the local one
+    const header = Buffer.alloc(HEADER_SIZE);
+    const handle = await open(sdLabelsPath, 'r');
+    try {
+      await handle.read(header, 0, HEADER_SIZE, 0);
+    } finally {
+      await handle.close();
+    }
+    const headerCheck = verifyHeader(header);
+    if (!headerCheck.valid) {
+      throw new Error(`the SD card's labels.db isn't valid (${headerCheck.error})`);
+    }
+
+    // Copy from SD to local with progress. Atomic, and the local labels.db being
+    // replaced is kept as labels.db.bak.
+    await withFileLock(localPath, () =>
+      copyFileAtomic(sdLabelsPath, localPath, {
+        onProgress: (progress) => sendProgress(formatProgressEvent(progress)),
+        throttleMs: 50,
+        keepBackup: true,
+      }),
     );
 
     sendProgress({

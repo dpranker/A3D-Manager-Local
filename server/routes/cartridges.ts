@@ -53,6 +53,7 @@ import {
   createSelectionBundle,
   type ImportOptions,
 } from '../lib/bundle-archive.js';
+import { CorruptFileError } from '../lib/safe-write.js';
 
 const router = Router();
 
@@ -196,7 +197,7 @@ router.post('/owned/:cartId', async (req, res) => {
     res.json({ success: true, entry });
   } catch (error) {
     console.error('Error adding owned cartridge:', error);
-    res.status(500).json({ error: 'Failed to add owned cartridge' });
+    res.status(500).json({ error: error instanceof CorruptFileError ? error.message : 'Failed to add owned cartridge' });
   }
 });
 
@@ -216,7 +217,7 @@ router.delete('/owned/:cartId', async (req, res) => {
     res.json({ success: removed });
   } catch (error) {
     console.error('Error removing owned cartridge:', error);
-    res.status(500).json({ error: 'Failed to remove owned cartridge' });
+    res.status(500).json({ error: error instanceof CorruptFileError ? error.message : 'Failed to remove owned cartridge' });
   }
 });
 

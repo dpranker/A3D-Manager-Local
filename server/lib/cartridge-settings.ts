@@ -15,7 +15,8 @@
  * which the published schema doesn't list (additionalProperties: false) but
  * which every file written by 3Dos 1.5.1 contains.
  */
-import { readFile, writeFile, mkdir, stat, readdir } from 'fs/promises';
+import { readFile, mkdir, stat, readdir } from 'fs/promises';
+import { writeFileAtomic } from './safe-write.js';
 import { existsSync } from 'fs';
 import path from 'path';
 import { lookupGameName } from './game-lookup.js';
@@ -505,7 +506,7 @@ export async function saveLocalSettings(
 
   const folderPath = await ensureLocalGameFolder(cartId, title);
   const settingsPath = path.join(folderPath, 'settings.json');
-  await writeFile(settingsPath, serializeSettings(normalized), 'utf-8');
+  await writeFileAtomic(settingsPath, serializeSettings(normalized));
   return settingsPath;
 }
 
@@ -593,7 +594,7 @@ export async function uploadSettingsToSD(
       await mkdir(sdGameFolder, { recursive: true });
     }
     const sdSettingsPath = path.join(sdGameFolder, 'settings.json');
-    await writeFile(sdSettingsPath, serializeSettings(settings), 'utf-8');
+    await writeFileAtomic(sdSettingsPath, serializeSettings(settings));
     return { success: true, path: sdSettingsPath };
   } catch (error) {
     return {

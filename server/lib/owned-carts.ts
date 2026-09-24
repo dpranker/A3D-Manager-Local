@@ -1,6 +1,7 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { updateJsonFile } from './safe-write.js';
 
 // =============================================================================
 // Types
@@ -28,6 +29,14 @@ const OWNED_CARTS_PATH = path.join(LOCAL_DIR, 'owned-carts.json');
 // File Operations
 // =============================================================================
 
+const emptyData = (): OwnedCartsData => ({ version: 1, cartridges: [] });
+
+function isOwnedCartsData(value: unknown): value is OwnedCartsData {
+  const data = value as OwnedCartsData;
+  return !!data && typeof data === 'object' && !!data.version && Array.isArray(data.cartridges) &&
+    data.cartridges.every((c) => c && typeof c.cartId === 'string');
+}
+
 /**
  * Ensure the .local directory exists
  */
@@ -52,36 +61,31 @@ export function hasOwnedCartsFile(): boolean {
 }
 
 /**
- * Load owned carts data from disk
+ * Load owned carts data from disk. For display: an unreadable file reads as empty
+ * but is left alone; the next change moves it aside and fails (see mutateOwnedCarts).
  */
 export async function loadOwnedCarts(): Promise<OwnedCartsData> {
   if (!hasOwnedCartsFile()) {
-    return { version: 1, cartridges: [] };
+    return emptyData();
   }
 
   try {
-    const content = await readFile(OWNED_CARTS_PATH, 'utf-8');
-    const data = JSON.parse(content) as OwnedCartsData;
-
-    // Validate structure
-    if (!data.version || !Array.isArray(data.cartridges)) {
-      console.warn('Invalid owned-carts.json structure, returning empty');
-      return { version: 1, cartridges: [] };
-    }
-
-    return data;
+    const data: unknown = JSON.parse(await readFile(OWNED_CARTS_PATH, 'utf-8'));
+    if (isOwnedCartsData(data)) return data;
+    console.warn('Invalid owned-carts.json structure, showing no owned cartridges');
   } catch (error) {
     console.error('Error loading owned carts:', error);
-    return { version: 1, cartridges: [] };
   }
+  return emptyData();
 }
 
 /**
- * Save owned carts data to disk
+ * Change owned-carts.json: one change at a time, written atomically. If the file
+ * can't be read it's kept as owned-carts.json.corrupt-<time> and the change fails.
  */
-export async function saveOwnedCarts(data: OwnedCartsData): Promise<void> {
+async function mutateOwnedCarts<R>(change: (data: OwnedCartsData) => R): Promise<R> {
   await ensureLocalDir();
-  await writeFile(OWNED_CARTS_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  return updateJsonFile(OWNED_CARTS_PATH, emptyData, change, isOwnedCartsData);
 }
 
 // =============================================================================
@@ -125,139 +129,115 @@ export async function getOwnedCartridge(cartId: string): Promise<OwnedCartridge 
 /**
  * Mark a cartridge as owned
  */
-export async function addOwnedCartridge(
+export function addOwnedCartridge(
   cartId: string,
   source: 'sd-card' | 'manual' = 'manual'
 ): Promise<OwnedCartridge> {
   const normalizedId = cartId.toLowerCase();
-  const data = await loadOwnedCarts();
+  return mutateOwnedCarts((data) => {
+    const existing = data.cartridges.find(c => c.cartId.toLowerCase() === normalizedId);
+    if (existing) return existing;
 
-  // Check if already owned
-  const existing = data.cartridges.find(c => c.cartId.toLowerCase() === normalizedId);
-  if (existing) {
-    return existing;
-  }
-
-  const newEntry: OwnedCartridge = {
-    cartId: normalizedId,
-    addedAt: new Date().toISOString(),
-    source,
-  };
-
-  data.cartridges.push(newEntry);
-  await saveOwnedCarts(data);
-
-  return newEntry;
+    const newEntry: OwnedCartridge = {
+      cartId: normalizedId,
+      addedAt: new Date().toISOString(),
+      source,
+    };
+    data.cartridges.push(newEntry);
+    return newEntry;
+  });
 }
 
 /**
  * Mark multiple cartridges as owned (batch operation)
  */
-export async function addOwnedCartridges(
+export function addOwnedCartridges(
   cartIds: string[],
   source: 'sd-card' | 'manual' = 'manual'
 ): Promise<{ added: string[]; skipped: string[] }> {
-  const data = await loadOwnedCarts();
-  const existingIds = new Set(data.cartridges.map(c => c.cartId.toLowerCase()));
+  return mutateOwnedCarts((data) => {
+    const existingIds = new Set(data.cartridges.map(c => c.cartId.toLowerCase()));
+    const added: string[] = [];
+    const skipped: string[] = [];
+    const now = new Date().toISOString();
 
-  const added: string[] = [];
-  const skipped: string[] = [];
-  const now = new Date().toISOString();
-
-  for (const cartId of cartIds) {
-    const normalizedId = cartId.toLowerCase();
-
-    if (existingIds.has(normalizedId)) {
-      skipped.push(normalizedId);
-    } else {
-      data.cartridges.push({
-        cartId: normalizedId,
-        addedAt: now,
-        source,
-      });
-      existingIds.add(normalizedId);
-      added.push(normalizedId);
+    for (const cartId of cartIds) {
+      const normalizedId = cartId.toLowerCase();
+      if (existingIds.has(normalizedId)) {
+        skipped.push(normalizedId);
+      } else {
+        data.cartridges.push({ cartId: normalizedId, addedAt: now, source });
+        existingIds.add(normalizedId);
+        added.push(normalizedId);
+      }
     }
-  }
-
-  if (added.length > 0) {
-    await saveOwnedCarts(data);
-  }
-
-  return { added, skipped };
+    return { added, skipped };
+  });
 }
 
 /**
  * Remove ownership marking from a cartridge
  */
 export async function removeOwnedCartridge(cartId: string): Promise<boolean> {
-  const normalizedId = cartId.toLowerCase();
-  const data = await loadOwnedCarts();
-
-  const initialLength = data.cartridges.length;
-  data.cartridges = data.cartridges.filter(c => c.cartId.toLowerCase() !== normalizedId);
-
-  if (data.cartridges.length < initialLength) {
-    await saveOwnedCarts(data);
-    return true;
-  }
-
-  return false;
+  return (await removeOwnedCartridges([cartId])) > 0;
 }
 
 /**
  * Remove ownership from multiple cartridges
  */
-export async function removeOwnedCartridges(cartIds: string[]): Promise<number> {
+export function removeOwnedCartridges(cartIds: string[]): Promise<number> {
   const normalizedIds = new Set(cartIds.map(id => id.toLowerCase()));
-  const data = await loadOwnedCarts();
-
-  const initialLength = data.cartridges.length;
-  data.cartridges = data.cartridges.filter(c => !normalizedIds.has(c.cartId.toLowerCase()));
-
-  const removedCount = initialLength - data.cartridges.length;
-
-  if (removedCount > 0) {
-    await saveOwnedCarts(data);
-  }
-
-  return removedCount;
+  return mutateOwnedCarts((data) => {
+    const initialLength = data.cartridges.length;
+    data.cartridges = data.cartridges.filter(c => !normalizedIds.has(c.cartId.toLowerCase()));
+    return initialLength - data.cartridges.length;
+  });
 }
 
 /**
  * Clear all ownership data
  */
-export async function clearOwnedCartridges(): Promise<number> {
-  const data = await loadOwnedCarts();
-  const count = data.cartridges.length;
-
-  data.cartridges = [];
-  await saveOwnedCarts(data);
-
-  return count;
+export function clearOwnedCartridges(): Promise<number> {
+  return mutateOwnedCarts((data) => {
+    const count = data.cartridges.length;
+    data.cartridges = [];
+    return count;
+  });
 }
 
 /**
  * Replace all owned cartridges (useful for sync operations)
  */
-export async function replaceOwnedCartridges(
+export function replaceOwnedCartridges(
   cartIds: string[],
   source: 'sd-card' | 'manual' = 'sd-card'
 ): Promise<{ added: number; removed: number }> {
-  const data = await loadOwnedCarts();
-  const previousCount = data.cartridges.length;
+  return mutateOwnedCarts((data) => {
+    const previousCount = data.cartridges.length;
+    const now = new Date().toISOString();
+    data.cartridges = cartIds.map(cartId => ({ cartId: cartId.toLowerCase(), addedAt: now, source }));
+    return { added: data.cartridges.length, removed: previousCount };
+  });
+}
 
-  const now = new Date().toISOString();
-  data.cartridges = cartIds.map(cartId => ({
-    cartId: cartId.toLowerCase(),
-    addedAt: now,
-    source,
-  }));
-
-  await saveOwnedCarts(data);
-
-  return {
-    added: data.cartridges.length,
-    removed: previousCount,
-  };
+/** Merge cartridges into the owned list (bundle import); returns how many were new */
+export function mergeOwnedCartridges(
+  cartridges: OwnedCartridge[],
+): Promise<{ added: number; skipped: number }> {
+  return mutateOwnedCarts((data) => {
+    const existingIds = new Set(data.cartridges.map(c => c.cartId.toLowerCase()));
+    let added = 0;
+    let skipped = 0;
+    for (const cart of cartridges) {
+      const normalizedId = cart.cartId.toLowerCase();
+      if (existingIds.has(normalizedId)) {
+        skipped++;
+      } else {
+        data.cartridges.push({ ...cart, cartId: normalizedId });
+        existingIds.add(normalizedId);
+        added++;
+      }
+    }
+    return { added, skipped };
+  });
 }

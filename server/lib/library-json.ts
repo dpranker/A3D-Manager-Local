@@ -11,7 +11,8 @@
  * players and 5 accessories) come from the docs page.
  */
 import { existsSync } from 'fs';
-import { mkdir, readdir, readFile, stat, writeFile } from 'fs/promises';
+import { mkdir, readdir, readFile, stat } from 'fs/promises';
+import { writeFileAtomic } from './safe-write.js';
 import path from 'path';
 import {
   CARTRIDGE_COLOR_VALUES,
@@ -270,7 +271,7 @@ export async function saveLocalLibrary(cartId: string, input: unknown): Promise<
   if (!library) throw new Error(`Invalid library.json: ${errors.join('; ')}`);
   const folder = await ensureLocalGameFolder(cartId, 'Unknown Cartridge');
   const filePath = path.join(folder, 'library.json');
-  await writeFile(filePath, serializeLibrary(library), 'utf-8');
+  await writeFileAtomic(filePath, serializeLibrary(library));
   return filePath;
 }
 
@@ -303,7 +304,7 @@ export async function uploadLibraryToSD(cartId: string, sdCardPath: string): Pro
       await mkdir(folder, { recursive: true });
     }
     const filePath = path.join(folder, 'library.json');
-    await writeFile(filePath, serializeLibrary(library), 'utf-8');
+    await writeFileAtomic(filePath, serializeLibrary(library));
     return { success: true, path: filePath };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
