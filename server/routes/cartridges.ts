@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { readdir, stat } from 'fs/promises';
+import { readFile, readdir, rm, stat } from 'fs/promises';
 import { existsSync } from 'fs';
 
 import {
@@ -11,7 +11,9 @@ import {
   addOwnedCartridge,
   addOwnedCartridges,
   removeOwnedCartridge,
+  removeOwnedCartridges,
 } from '../lib/owned-carts.js';
+import { readConsoleLibraryIds } from '../lib/console-library.js';
 
 import {
   getSettingsInfo,
@@ -73,6 +75,78 @@ const bundleUpload = multer({
 // =============================================================================
 // Ownership Routes
 // =============================================================================
+
+async function findOrphanedUnknownFolders(sdCardPath: string): Promise<Array<{ cartId: string; folderName: string }>> {
+  const activeIds = await readConsoleLibraryIds(sdCardPath);
+  const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
+  const folders = await readdir(gamesDir, { withFileTypes: true });
+  const [database, custom] = await Promise.all([
+    readFile(path.join(process.cwd(), 'data', 'cart-names.json'), 'utf8'),
+    readFile(path.join(process.cwd(), '.local', 'user-carts.json'), 'utf8').catch(() => '[]'),
+  ]);
+  const knownIds = new Set((JSON.parse(database) as Array<{ id: string }>).map(({ id }) => id.toLowerCase()));
+  for (const entry of JSON.parse(custom) as Array<{ id: string }>) knownIds.add(entry.id.toLowerCase());
+
+  const candidates: Array<{ cartId: string; folderName: string }> = [];
+  for (const folder of folders) {
+    if (!folder.isDirectory() || !folder.name.toLowerCase().startsWith('unknown cartridge')) continue;
+    const match = folder.name.match(/([0-9a-fA-F]{8})$/);
+    if (!match) continue;
+    const cartId = match[1].toLowerCase();
+    if (activeIds.has(cartId) || knownIds.has(cartId)) continue;
+    const libraryPath = path.join(gamesDir, folder.name, 'library.json');
+    if (existsSync(libraryPath)) {
+      try {
+        const library = JSON.parse(await readFile(libraryPath, 'utf8')) as { data?: { title?: string } };
+        if (library.data?.title !== 'Unknown Cartridge') continue;
+      } catch {
+        continue; // Preserve folders with unreadable metadata for manual review.
+      }
+    }
+    candidates.push({ cartId, folderName: folder.name });
+  }
+  return candidates;
+}
+
+/** Compare unknown SD card folders with the active library.db. */
+router.post('/owned/cleanup-orphans/scan', async (req, res) => {
+  const { sdCardPath } = req.body ?? {};
+  if (typeof sdCardPath !== 'string' || !sdCardPath) {
+    return res.status(400).json({ error: 'SD card path is required' });
+  }
+  try {
+    const candidates = await findOrphanedUnknownFolders(sdCardPath);
+    res.json({ candidates });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Could not compare the SD card library' });
+  }
+});
+
+/** Remove selected candidates after rechecking the current SD card library. */
+router.post('/owned/cleanup-orphans/apply', async (req, res) => {
+  const { sdCardPath, cartIds } = req.body ?? {};
+  if (typeof sdCardPath !== 'string' || !sdCardPath || !Array.isArray(cartIds) ||
+      cartIds.some((id: unknown) => typeof id !== 'string' || !/^[0-9a-f]{8}$/i.test(id))) {
+    return res.status(400).json({ error: 'SD card path and valid cartridge IDs are required' });
+  }
+  try {
+    const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
+    const candidates = await findOrphanedUnknownFolders(sdCardPath);
+    const byId = new Map(candidates.map((candidate) => [candidate.cartId, candidate.folderName]));
+    const safeIds = [...new Set((cartIds as string[]).map((id) => id.toLowerCase()))]
+      .filter((id) => byId.has(id));
+    const deletedFolders: string[] = [];
+    for (const id of safeIds) {
+      const folder = byId.get(id)!;
+      await rm(path.join(gamesDir, folder), { recursive: true });
+      deletedFolders.push(folder);
+    }
+    const removed = await removeOwnedCartridges(safeIds);
+    res.json({ removed, deletedFolders });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Could not clean orphaned cartridges' });
+  }
+});
 
 /**
  * GET /api/cartridges/owned

@@ -10,7 +10,7 @@ import { AddCartridgeModal } from './AddCartridgeModal';
 import { LabelsImportModal } from './LabelsImportModal';
 import { useLabelSync } from './LabelSyncIndicator';
 import { FirmwareSection } from './FirmwareSection';
-import { Button } from './ui';
+import { Button, Modal, ModalFooter } from './ui';
 import './SettingsPage.css';
 
 interface QuickCompareResult {
@@ -74,6 +74,11 @@ interface LocalDataStatus {
   gameData: { exists: boolean; folderCount: number; totalSize: number };
 }
 
+interface OrphanedCartridge {
+  cartId: string;
+  folderName: string | null;
+}
+
 export function SettingsPage() {
   const { invalidateImageCache, lastInvalidated } = useImageCache();
   const { selectedSDCard } = useSDCard();
@@ -122,6 +127,10 @@ export function SettingsPage() {
 
   // Add cartridge modal state
   const [showAddCartridgeModal, setShowAddCartridgeModal] = useState(false);
+  const [orphanCandidates, setOrphanCandidates] = useState<OrphanedCartridge[] | null>(null);
+  const [selectedOrphanIds, setSelectedOrphanIds] = useState<Set<string>>(new Set());
+  const [orphanBusy, setOrphanBusy] = useState(false);
+  const [orphanError, setOrphanError] = useState<string | null>(null);
 
   // Labels import modal state
   const [showLabelsImportModal, setShowLabelsImportModal] = useState(false);
@@ -157,6 +166,49 @@ export function SettingsPage() {
 
   const handleClearCache = () => {
     invalidateImageCache();
+  };
+
+  const handleScanOrphanedCarts = async () => {
+    if (!selectedSDCard) return;
+    setOrphanBusy(true);
+    setOrphanError(null);
+    try {
+      const response = await fetch('/api/cartridges/owned/cleanup-orphans/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sdCardPath: selectedSDCard.path }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not compare the SD card library');
+      const candidates = result.candidates as OrphanedCartridge[];
+      setOrphanCandidates(candidates);
+      setSelectedOrphanIds(new Set(candidates.map(({ cartId }) => cartId)));
+    } catch (error) {
+      setOrphanError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setOrphanBusy(false);
+    }
+  };
+
+  const handleRemoveOrphanedCarts = async () => {
+    if (!selectedSDCard || selectedOrphanIds.size === 0) return;
+    setOrphanBusy(true);
+    setOrphanError(null);
+    try {
+      const response = await fetch('/api/cartridges/owned/cleanup-orphans/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sdCardPath: selectedSDCard.path, cartIds: [...selectedOrphanIds] }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not remove orphaned cartridges');
+      setOrphanCandidates(null);
+      await fetchLocalDataStatus();
+    } catch (error) {
+      setOrphanError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setOrphanBusy(false);
+    }
   };
 
   const handleQuickCompare = async () => {
@@ -396,6 +448,23 @@ export function SettingsPage() {
             </Button>
           </div>
         </section>
+
+        {isConnected && selectedSDCard && (
+          <section className="settings-section">
+            <h2>Cartridge List</h2>
+            <p>Compare unknown folders on your SD card with the games currently listed by your Analogue 3D.</p>
+            <div className="setting-row">
+              <div className="setting-info">
+                <h3>Clean up orphaned unknowns</h3>
+                <p className="setting-description">
+                  Compare unknown folders on the connected SD card with the console’s current <code>library.db</code>. A leftover folder may mean the console stopped tracking a game after it was removed from its library. Review the matches, then choose which orphaned folders to delete. Deletion cannot be undone.
+                </p>
+                {orphanError && <p className="setting-description firmware-error">{orphanError}</p>}
+              </div>
+              <Button onClick={handleScanOrphanedCarts} loading={orphanBusy}>Compare</Button>
+            </div>
+          </section>
+        )}
 
         {/* Import labels.db */}
         <section className="settings-section">
@@ -1040,6 +1109,49 @@ export function SettingsPage() {
             : undefined,
         } : null}
       />
+
+      <Modal
+        isOpen={orphanCandidates !== null}
+        onClose={() => setOrphanCandidates(null)}
+        title="Orphaned unknown cartridges"
+        footer={(
+          <ModalFooter align="between">
+            <Button variant="ghost" onClick={() => setOrphanCandidates(null)}>Cancel</Button>
+            <Button variant="danger" onClick={handleRemoveOrphanedCarts} disabled={selectedOrphanIds.size === 0} loading={orphanBusy}>
+              Delete selected ({selectedOrphanIds.size})
+            </Button>
+          </ModalFooter>
+        )}
+      >
+        {orphanCandidates?.length ? (
+          <>
+            <p>
+              These unknown cartridge IDs came from the app’s SD card import, but are not in the console’s current <code>library.db</code>.
+              If a folder is listed below, it remains on the card even though the console no longer tracks that ID. This may happen after removing a game from the console library.
+              The comparison cannot tell why the ID is absent. Deleting a selection permanently removes its matching folder and all files inside it, including any settings or controller pak save, then removes it from the app’s owned list. This cannot be undone. Items without a matching folder are removed from the app’s list only.
+            </p>
+            {orphanCandidates.map(({ cartId, folderName }) => (
+              <label key={cartId} className="orphan-cartridge-row">
+                <input
+                  type="checkbox"
+                  checked={selectedOrphanIds.has(cartId)}
+                  onChange={(event) => setSelectedOrphanIds((previous) => {
+                    const next = new Set(previous);
+                    if (event.target.checked) next.add(cartId);
+                    else next.delete(cartId);
+                    return next;
+                  })}
+                />
+                <span>
+                  <span>{folderName ? `Folder remains: ${folderName}` : 'No matching SD card folder'} <code>{cartId}</code></span>
+                </span>
+              </label>
+            ))}
+          </>
+        ) : (
+          <p>No orphaned unknown cartridges found on this card.</p>
+        )}
+      </Modal>
     </div>
   );
 }
