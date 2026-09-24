@@ -36,8 +36,9 @@ Observed on a real card after updating from 1.5.0 (2026-09-23):
     this block is a string of the library titles' first letters in
     alphabetical order (e.g. `ABBBBCGHLMMMMNNNOSSSSTTVW`), probably the
     alphabetical index the release notes mention. Not decoded further.
-  - A3D Manager only checks that `library.db` exists; it doesn't read or write
-    it, so the change doesn't affect the app. The format section in
+  - A3D Manager never writes `library.db`. It reads only the header and the
+    cart ID table (to find orphaned unknown folders), which kept their layout,
+    so the change doesn't affect the app. The format section in
     ANALOGUE_3D_SD_CARD_FORMAT.md describes the layout before 1.5.1.
 - The console's converted files don't fully match Analogue's published schema:
   they include `enable_edge_overshoot` in the `pvm`, `crt` and `scanlines` modes,

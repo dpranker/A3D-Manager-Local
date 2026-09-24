@@ -2,6 +2,18 @@
 
 All notable changes to A3D Manager Local. Each release's section is used as its GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- **Many more games recognized:** the cartridge database grew from 343 to 936 IDs, covering nearly every retail release and revision in every region (including Japanese games such as Neon Genesis Evangelion). These games no longer show as "Unknown Cartridge" or get the Library tab.
+- **Alternate search names** from [n64-flashcart-menu-metadata](https://github.com/n64-tools/n64-flashcart-menu-metadata), so common alternate spellings of game titles also match in search.
+- **Clean up orphaned unknowns** (Settings → Cartridge List): finds "Unknown Cartridge" folders on the SD card that the console no longer tracks in its `library.db`, and deletes the ones you select.
+
+### Changed
+
+- The firmware check shows smoother feedback while checking.
+
 ## [0.1.0] - 2026-09-23
 
 First release of A3D Manager Local, a fork of [TheLeggett/A3D-Manager](https://github.com/TheLeggett/A3D-Manager). See the [README](https://github.com/dpranker/A3D-Manager-Local#readme) for the full feature list and install instructions.

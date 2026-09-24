@@ -76,7 +76,7 @@ interface LocalDataStatus {
 
 interface OrphanedCartridge {
   cartId: string;
-  folderName: string | null;
+  folderName: string;
 }
 
 export function SettingsPage() {
@@ -182,7 +182,7 @@ export function SettingsPage() {
       if (!response.ok) throw new Error(result.error || 'Could not compare the SD card library');
       const candidates = result.candidates as OrphanedCartridge[];
       setOrphanCandidates(candidates);
-      setSelectedOrphanIds(new Set(candidates.map(({ cartId }) => cartId)));
+      setSelectedOrphanIds(new Set());
     } catch (error) {
       setOrphanError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1126,9 +1126,9 @@ export function SettingsPage() {
         {orphanCandidates?.length ? (
           <>
             <p>
-              These unknown cartridge IDs came from the app’s SD card import, but are not in the console’s current <code>library.db</code>.
-              If a folder is listed below, it remains on the card even though the console no longer tracks that ID. This may happen after removing a game from the console library.
-              The comparison cannot tell why the ID is absent. Deleting a selection permanently removes its matching folder and all files inside it, including any settings or controller pak save, then removes it from the app’s owned list. This cannot be undone. Items without a matching folder are removed from the app’s list only.
+              These unknown cartridge folders are on the SD card, but their IDs are not in the console’s current <code>library.db</code>.
+              This may happen after removing a game from the console library, or when settings were copied to the card for a cartridge the console hasn’t seen yet.
+              The comparison cannot tell why the ID is absent. Deleting a selection permanently removes its folder and all files inside it, including any settings or controller pak save, and removes it from the app’s owned list. This cannot be undone.
             </p>
             {orphanCandidates.map(({ cartId, folderName }) => (
               <label key={cartId} className="orphan-cartridge-row">
@@ -1143,7 +1143,7 @@ export function SettingsPage() {
                   })}
                 />
                 <span>
-                  <span>{folderName ? `Folder remains: ${folderName}` : 'No matching SD card folder'} <code>{cartId}</code></span>
+                  <span>{folderName} <code>{cartId}</code></span>
                 </span>
               </label>
             ))}
