@@ -14,12 +14,13 @@
  */
 import { createHash } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
-import { mkdir, open, readdir, rename, stat, unlink } from 'fs/promises';
+import { mkdir, readdir, rename, stat, unlink } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import type { ReadableStream as WebReadableStream } from 'stream/web';
 import { copyFileWithProgress, type ProgressCallback } from './file-transfer.js';
+import { syncToDisk } from './safe-write.js';
 
 const SITE_ORIGIN = 'https://www.analogue.co';
 export const FIRMWARE_API_BASE = `${SITE_ORIGIN}/support/3d/firmware`;
@@ -402,28 +403,6 @@ export interface InstallResult {
   md5: string;
   /** Older update files deleted from the card root */
   removed: string[];
-}
-
-/**
- * fsync a file or directory. On FAT a rename only changes the directory, which
- * the kernel otherwise writes back up to ~30s later: a card removed in that
- * window keeps the old name. Windows can't open directories for syncing (it
- * writes removable-media metadata through immediately), so that case is skipped.
- */
-async function syncToDisk(target: string): Promise<void> {
-  let handle;
-  try {
-    handle = await open(target, 'r');
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (process.platform === 'win32' && (code === 'EISDIR' || code === 'EPERM' || code === 'EACCES')) return;
-    throw error;
-  }
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
 }
 
 /**
