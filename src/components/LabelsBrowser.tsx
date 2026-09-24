@@ -13,6 +13,7 @@ import { useLabelSync } from './LabelSyncIndicator';
 import { TooltipIcon, Tooltip, Button } from './ui';
 import './LabelsBrowser.css';
 import { cartridgeShellColor } from '../lib/cartColors';
+import { apiFetch, errorMessage } from '../lib/api';
 
 interface LabelEntry {
   cartId: string;
@@ -567,12 +568,24 @@ export function LabelsBrowser({ onSelectLabel, refreshKey, colorsRefreshKey, sdC
                   size="sm"
                   disabled={selectedCartIds.size === 0}
                   onClick={async () => {
-                    // Mark selected as owned
+                    // Mark selected as owned; carts that fail stay selected so they can be retried
+                    setError(null);
+                    const failed = new Set<string>();
+                    let firstError = '';
                     for (const cartId of selectedCartIds) {
-                      await fetch(`/api/cartridges/owned/${cartId}`, { method: 'POST' });
+                      try {
+                        await apiFetch(`/api/cartridges/owned/${cartId}`, { method: 'POST' });
+                      } catch (err) {
+                        failed.add(cartId);
+                        firstError ||= errorMessage(err);
+                      }
                     }
-                    setSelectedCartIds(new Set());
-                    setSelectionMode(false);
+                    setSelectedCartIds(failed);
+                    if (failed.size) {
+                      setError(`${failed.size} of ${selectedCartIds.size} weren't marked as owned: ${firstError}`);
+                    } else {
+                      setSelectionMode(false);
+                    }
                   }}
                 >
                   Mark Owned

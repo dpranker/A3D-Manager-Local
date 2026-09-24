@@ -939,8 +939,10 @@ router.post('/:cartId/game-pak/backups/:backupId/restore', async (req, res) => {
     );
     res.json({
       success: true,
+      local: 'ok',
+      sd: result.sd,
       restoredToLocal: result.local,
-      restoredToSD: result.sd,
+      restoredToSD: result.sd === 'ok',
     });
   } catch (error) {
     console.error('Error restoring backup:', error);

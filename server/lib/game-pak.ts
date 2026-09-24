@@ -4,6 +4,7 @@ import path from 'path';
 import { createHash, randomUUID } from 'crypto';
 import { findGameFolder, ensureLocalGameFolder, ensureSdGameFolder, getLocalGamesDir } from './cartridge-settings.js';
 import { copyFileAtomic, updateJsonFile, writeFileAtomic } from './safe-write.js';
+import { cardResultFrom, type CardResult } from './card-result.js';
 
 // =============================================================================
 // Constants
@@ -739,7 +740,7 @@ export async function restoreBackup(
   backupId: string,
   title: string = 'Unknown Cartridge',
   sdCardPath?: string
-): Promise<{ local: boolean; sd: boolean }> {
+): Promise<{ local: boolean; sd: CardResult }> {
   const backupBuffer = await getBackupBuffer(cartId, backupId);
   if (!backupBuffer) {
     throw new Error('Backup not found');
@@ -753,15 +754,9 @@ export async function restoreBackup(
 
   // Restore to local
   await saveLocalGamePak(cartId, backupBuffer, title);
-  const result = { local: true, sd: false };
 
   // Optionally restore to SD card
-  if (sdCardPath) {
-    const sdResult = await uploadGamePakToSD(cartId, sdCardPath);
-    result.sd = sdResult.success;
-  }
-
-  return result;
+  return { local: true, sd: cardResultFrom(sdCardPath ? await uploadGamePakToSD(cartId, sdCardPath) : null) };
 }
 
 /**
