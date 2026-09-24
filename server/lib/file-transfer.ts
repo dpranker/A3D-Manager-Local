@@ -7,7 +7,6 @@
 
 import { statSync } from 'fs';
 import { stat, readdir, mkdir } from 'fs/promises';
-import { Transform, type TransformCallback } from 'stream';
 import path from 'path';
 
 // =============================================================================
@@ -63,68 +62,6 @@ export type ProgressCallback = (progress: FileProgress) => void;
 export type BatchProgressCallback = (progress: BatchProgress) => void;
 
 // =============================================================================
-// Progress Stream
-// =============================================================================
-
-interface ProgressStreamOptions {
-  totalBytes: number;
-  onProgress: ProgressCallback;
-  throttleMs?: number;
-}
-
-/**
- * A transform stream that tracks progress as data flows through.
- * Emits progress updates at configurable intervals.
- */
-export class ProgressStream extends Transform {
-  private bytesWritten = 0;
-  private startTime: number;
-  private lastEmit = 0;
-  private throttleMs: number;
-  private totalBytes: number;
-  private onProgress: ProgressCallback;
-
-  constructor(options: ProgressStreamOptions) {
-    super();
-    this.totalBytes = options.totalBytes;
-    this.onProgress = options.onProgress;
-    this.throttleMs = options.throttleMs ?? 100; // Default: emit every 100ms
-    this.startTime = Date.now();
-  }
-
-  _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void {
-    this.bytesWritten += chunk.length;
-
-    const now = Date.now();
-    const shouldEmit = now - this.lastEmit >= this.throttleMs;
-
-    // Always emit on first chunk and when complete
-    const isComplete = this.bytesWritten >= this.totalBytes;
-
-    if (shouldEmit || isComplete) {
-      this.lastEmit = now;
-      const elapsedMs = now - this.startTime;
-      const bytesPerSecond = elapsedMs > 0 ? (this.bytesWritten / elapsedMs) * 1000 : 0;
-      const remainingBytes = this.totalBytes - this.bytesWritten;
-      const estimatedTimeRemainingMs = bytesPerSecond > 0
-        ? (remainingBytes / bytesPerSecond) * 1000
-        : 0;
-
-      this.onProgress({
-        bytesWritten: this.bytesWritten,
-        totalBytes: this.totalBytes,
-        percentage: Math.min(100, (this.bytesWritten / this.totalBytes) * 100),
-        elapsedMs,
-        bytesPerSecond,
-        estimatedTimeRemainingMs,
-      });
-    }
-
-    callback(null, chunk);
-  }
-}
-
-// =============================================================================
 // File Operations
 // =============================================================================
 
@@ -152,7 +89,7 @@ function getTransferSettings(): { chunkSize: number; fsyncPerChunk: boolean } {
 /**
  * Copy a file with progress reporting.
  * Settings configurable via TRANSFER_CHUNK_SIZE and TRANSFER_FSYNC_PER_CHUNK env vars.
- * Defaults: 4MB chunks, no fsync per chunk (based on benchmark results).
+ * Defaults: 2MB chunks with fsync after each chunk.
  *
  * @param sourcePath - Path to source file
  * @param destPath - Path to destination file

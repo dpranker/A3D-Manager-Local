@@ -15,6 +15,23 @@
  * which the published schema doesn't list (additionalProperties: false) but
  * which every file written by 3Dos 1.5.1 contains.
  */
+import {
+  SETTINGS_SCHEMA_URL,
+  DISPLAY_MODE_VALUES,
+  BEAM_CONVERGENCE_VALUES,
+  EDGE_HARDNESS_VALUES,
+  IMAGE_FIT_VALUES,
+  IMAGE_SIZE_VALUES,
+  INTERPOLATION_VALUES,
+  GAMMA_TRANSFER_VALUES,
+  SHARPNESS_VALUES,
+  CARTRIDGE_COLOR_VALUES,
+  OVERCLOCK_VALUES,
+  REGION_VALUES,
+  type CRTModeSettings,
+  type CartridgeSettings,
+} from '../../shared/settings.js';
+export * from '../../shared/settings.js';
 import { readFile, mkdir, stat, readdir } from 'fs/promises';
 import { writeFileAtomic } from './safe-write.js';
 import { existsSync } from 'fs';
@@ -22,92 +39,8 @@ import path from 'path';
 import { lookupGameName } from './game-lookup.js';
 import { compareVersions, getSDFirmwareStatus } from './firmware.js';
 
-// =============================================================================
-// Types
-// =============================================================================
-
-export const SETTINGS_SCHEMA_URL = 'https://schemas.analogue.co/platform/3d/settings.json';
 /** First firmware that reads (and writes) this settings.json format */
 export const SETTINGS_FORMAT_MIN_FIRMWARE = '1.5.1';
-
-export const DISPLAY_MODE_VALUES = ['bvm', 'pvm', 'crt', 'scanlines', 'clean'] as const;
-export const BEAM_CONVERGENCE_VALUES = ['consumer', 'professional', 'off'] as const;
-export const EDGE_HARDNESS_VALUES = ['hard', 'soft'] as const;
-export const IMAGE_FIT_VALUES = ['original', 'stretch', 'cinema-zoom'] as const;
-export const IMAGE_SIZE_VALUES = ['fill', 'integer', 'integer-plus'] as const;
-export const INTERPOLATION_VALUES = ['bc-spline', 'bilinear', 'blackman-harris', 'lanczos2'] as const;
-export const GAMMA_TRANSFER_VALUES = ['tube', 'modern'] as const;
-export const SHARPNESS_VALUES = ['very-soft', 'soft', 'medium', 'sharp', 'very-sharp'] as const;
-export const CARTRIDGE_COLOR_VALUES = ['gray', 'red', 'green', 'blue', 'yellow', 'gold', 'black', 'purple', 'rose'] as const;
-export const OVERCLOCK_VALUES = ['auto', 'enhanced', 'enhanced-plus', 'unleashed', 'off'] as const;
-export const REGION_VALUES = ['auto', 'ntsc', 'pal'] as const;
-
-export type DisplayMode = (typeof DISPLAY_MODE_VALUES)[number];
-export type BeamConvergence = (typeof BEAM_CONVERGENCE_VALUES)[number];
-export type EdgeHardness = (typeof EDGE_HARDNESS_VALUES)[number];
-export type ImageFit = (typeof IMAGE_FIT_VALUES)[number];
-export type ImageSize = (typeof IMAGE_SIZE_VALUES)[number];
-export type InterpolationAlg = (typeof INTERPOLATION_VALUES)[number];
-export type GammaTransfer = (typeof GAMMA_TRANSFER_VALUES)[number];
-export type Sharpness = (typeof SHARPNESS_VALUES)[number];
-export type CartridgeColor = (typeof CARTRIDGE_COLOR_VALUES)[number];
-export type Overclock = (typeof OVERCLOCK_VALUES)[number];
-export type Region = (typeof REGION_VALUES)[number];
-
-export interface CRTModeSettings {
-  horizontal_beam_convergence: BeamConvergence;
-  vertical_beam_convergence: BeamConvergence;
-  /** Only adjustable in BVM mode; the console still writes it for every CRT-style mode */
-  enable_edge_overshoot: boolean;
-  enable_edge_hardness: EdgeHardness;
-  image_fit: ImageFit;
-  image_size: ImageSize;
-}
-
-export interface CleanModeSettings {
-  interpolation_alg: InterpolationAlg;
-  gamma_transfer_function: GammaTransfer;
-  sharpness: Sharpness;
-  image_fit: ImageFit;
-  image_size: ImageSize;
-}
-
-export interface DisplayCatalog {
-  bvm: CRTModeSettings;
-  pvm: CRTModeSettings;
-  crt: CRTModeSettings;
-  scanlines: CRTModeSettings;
-  clean: CleanModeSettings;
-}
-
-export interface DisplaySettings {
-  odm: DisplayMode;
-  catalog: DisplayCatalog;
-}
-
-export interface LibrarySettings {
-  cartridge_color: CartridgeColor;
-}
-
-export interface HardwareSettings {
-  disable_antialiasing: boolean;
-  disable_deblur: boolean;
-  disable_texture_filtering: boolean;
-  enable_32_bit_color: boolean;
-  force_original_hardware: boolean;
-  force_progressive_output: boolean;
-  overclock: Overclock;
-  region: Region;
-  virtual_expansion_pak: boolean;
-  horizontal_upscaling: boolean;
-}
-
-export interface CartridgeSettings {
-  $schema: string;
-  display: DisplaySettings;
-  library: LibrarySettings;
-  hardware: HardwareSettings;
-}
 
 /** current: 3Dos 1.5.1+ format; legacy: camelCase format from 1.5.0 and earlier */
 export type SettingsFormat = 'current' | 'legacy';
@@ -137,62 +70,6 @@ export class LegacySettingsError extends Error {
 
 const LOCAL_DIR = path.join(process.cwd(), '.local');
 const LOCAL_GAMES_DIR = path.join(LOCAL_DIR, 'Library', 'N64', 'Games');
-
-const DEFAULT_BVM_SETTINGS: CRTModeSettings = {
-  horizontal_beam_convergence: 'professional',
-  vertical_beam_convergence: 'professional',
-  enable_edge_overshoot: false,
-  enable_edge_hardness: 'soft',
-  image_fit: 'original',
-  image_size: 'fill',
-};
-
-export const DEFAULT_HARDWARE_SETTINGS: HardwareSettings = {
-  disable_antialiasing: false,
-  disable_deblur: false,
-  disable_texture_filtering: false,
-  enable_32_bit_color: false,
-  force_original_hardware: false,
-  force_progressive_output: true,
-  overclock: 'auto',
-  region: 'auto',
-  virtual_expansion_pak: true,
-  horizontal_upscaling: true,
-};
-
-/**
- * Defaults from Analogue's sample settings.json. (The console's own per-game
- * defaults vary by title and aren't published.) The locked edge overshoot
- * values for pvm/crt/scanlines match what 3Dos 1.5.1 writes.
- */
-export function createDefaultSettings(): CartridgeSettings {
-  return {
-    $schema: SETTINGS_SCHEMA_URL,
-    display: {
-      odm: 'bvm',
-      catalog: {
-        bvm: { ...DEFAULT_BVM_SETTINGS },
-        pvm: { ...DEFAULT_BVM_SETTINGS, enable_edge_overshoot: true },
-        crt: {
-          ...DEFAULT_BVM_SETTINGS,
-          horizontal_beam_convergence: 'consumer',
-          vertical_beam_convergence: 'consumer',
-          enable_edge_overshoot: true,
-        },
-        scanlines: { ...DEFAULT_BVM_SETTINGS, horizontal_beam_convergence: 'off', vertical_beam_convergence: 'off' },
-        clean: {
-          interpolation_alg: 'bc-spline',
-          gamma_transfer_function: 'tube',
-          sharpness: 'medium',
-          image_fit: 'original',
-          image_size: 'fill',
-        },
-      },
-    },
-    library: { cartridge_color: 'gray' },
-    hardware: { ...DEFAULT_HARDWARE_SETTINGS },
-  };
-}
 
 // =============================================================================
 // Path Helpers

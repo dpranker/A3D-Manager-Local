@@ -10,6 +10,17 @@
  * in the console's key order. Limits the schema doesn't encode (at most 4
  * players and 5 accessories) come from the docs page.
  */
+import {
+  LIBRARY_SCHEMA_URL,
+  MAX_TITLE_LENGTH,
+  MAX_PLAYERS,
+  MAX_ACCESSORIES,
+  ACCESSORY_VALUES,
+  LIBRARY_REGION_VALUES,
+  VIRTUAL_ACCESSORY_VALUES,
+  type LibraryJson,
+} from '../../shared/library.js';
+export * from '../../shared/library.js';
 import { existsSync } from 'fs';
 import { readdir, readFile, stat } from 'fs/promises';
 import { writeFileAtomic } from './safe-write.js';
@@ -25,70 +36,7 @@ import {
   getSDSettingsSupport,
   parseSettings,
   type CartridgeColor,
-  type Overclock,
-  type Region,
 } from './cartridge-settings.js';
-
-export const LIBRARY_SCHEMA_URL = 'https://schemas.analogue.co/platform/3d/library.json';
-
-export const ACCESSORY_VALUES = [
-  'controller-pak',
-  'expansion-pak',
-  'rumble-pak',
-  'transfer-pak',
-  'voice-recognition-unit-usa',
-  'voice-recognition-system-japan',
-  'denshadego-controller',
-  'bio-sensor',
-  'tsurikon-64',
-  'n64-mouse',
-] as const;
-export const LIBRARY_REGION_VALUES = [
-  'asia', 'australia', 'brazil', 'germany', 'europe', 'france', 'england', 'italy', 'japan', 'netherlands', 'spain', 'usa',
-] as const;
-export const VIRTUAL_ACCESSORY_VALUES = ['no-pak', 'controller-pak', 'rumble-pak'] as const;
-
-export const MAX_TITLE_LENGTH = 127;
-export const MAX_PLAYERS = 4;
-export const MAX_ACCESSORIES = 5;
-
-export type Accessory = (typeof ACCESSORY_VALUES)[number];
-export type LibraryRegion = (typeof LIBRARY_REGION_VALUES)[number];
-export type VirtualAccessory = (typeof VIRTUAL_ACCESSORY_VALUES)[number];
-
-export interface LibraryData {
-  title: string;
-  /** 0-based; the console shows revision N as "Rev N" */
-  revision: number;
-  player_count: number;
-  accessories: Accessory[];
-  region: LibraryRegion[];
-  developers: string[];
-  publishers: string[];
-  release_year: number;
-}
-
-/** Note: disable_anti_aliasing here vs disable_antialiasing in settings.json */
-export interface LibraryDefaults {
-  virtual_expansion_pak: boolean;
-  region: Region;
-  disable_deblur: boolean;
-  enable_32_bit_color: boolean;
-  force_progressive_output: boolean;
-  disable_texture_filtering: boolean;
-  disable_anti_aliasing: boolean;
-  force_original_hardware: boolean;
-  horizontal_upscaling: boolean;
-  overclock: Overclock;
-  virtual_accessory: VirtualAccessory;
-  cart_color: CartridgeColor;
-}
-
-export interface LibraryJson {
-  $schema: string;
-  data: LibraryData;
-  defaults: LibraryDefaults;
-}
 
 export interface LibraryInfo {
   exists: boolean;
@@ -97,41 +45,6 @@ export interface LibraryInfo {
   lastModified?: string;
   library?: LibraryJson;
   error?: string;
-}
-
-/**
- * What 3Dos 1.5.1 writes for a new unknown cartridge (identical in every file
- * seen on a real card), with the release year set to the current year as the
- * console does.
- */
-export function createDefaultLibrary(title = 'Unknown Cartridge'): LibraryJson {
-  return {
-    $schema: LIBRARY_SCHEMA_URL,
-    data: {
-      title: title.slice(0, MAX_TITLE_LENGTH),
-      revision: 0,
-      player_count: 1,
-      accessories: [],
-      region: [],
-      developers: ['Unknown'],
-      publishers: ['Unknown'],
-      release_year: new Date().getFullYear(),
-    },
-    defaults: {
-      virtual_expansion_pak: true,
-      region: 'auto',
-      disable_deblur: false,
-      enable_32_bit_color: false,
-      force_progressive_output: false,
-      disable_texture_filtering: false,
-      disable_anti_aliasing: false,
-      force_original_hardware: false,
-      horizontal_upscaling: false,
-      overclock: 'off',
-      virtual_accessory: 'no-pak',
-      cart_color: 'gray',
-    },
-  };
 }
 
 // =============================================================================

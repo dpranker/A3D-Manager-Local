@@ -16,15 +16,6 @@ import { cardResultFrom, type CardResult } from './card-result.js';
  */
 export const CONTROLLER_PAK_SIZE = 32768;
 
-/**
- * Controller Pak structure:
- * - 123 pages of 256 bytes each
- * - First pages contain index/allocation tables
- * - Remaining pages store actual save data
- */
-export const CONTROLLER_PAK_PAGE_SIZE = 256;
-export const CONTROLLER_PAK_PAGE_COUNT = 123;
-
 export const GAME_PAK_FILENAME = 'controller_pak.img';
 
 /**
@@ -158,52 +149,6 @@ export function computeGamePakHash(buffer: Buffer): string {
   return createHash('md5').update(buffer).digest('hex');
 }
 
-/**
- * Get sync status between local and SD card game paks
- */
-export async function getGamePakSyncStatus(
-  cartId: string,
-  sdCardPath?: string
-): Promise<GamePakSyncStatus> {
-  let localHash: string | null = null;
-  let sdHash: string | null = null;
-
-  // Get local hash
-  const localPath = await getLocalGamePakPath(cartId);
-  if (localPath && existsSync(localPath)) {
-    try {
-      const buffer = await readFile(localPath);
-      if (buffer.length === CONTROLLER_PAK_SIZE) {
-        localHash = computeGamePakHash(buffer);
-      }
-    } catch {
-      // Ignore errors, hash stays null
-    }
-  }
-
-  // Get SD hash if path provided
-  if (sdCardPath) {
-    const sdPath = await getSDGamePakPath(sdCardPath, cartId);
-    if (sdPath && existsSync(sdPath)) {
-      try {
-        const buffer = await readFile(sdPath);
-        if (buffer.length === CONTROLLER_PAK_SIZE) {
-          sdHash = computeGamePakHash(buffer);
-        }
-      } catch {
-        // Ignore errors, hash stays null
-      }
-    }
-  }
-
-  // Determine sync status
-  const bothExist = localHash !== null && sdHash !== null;
-  const inSync = !bothExist || localHash === sdHash;
-  const hasConflict = bothExist && localHash !== sdHash;
-
-  return { localHash, sdHash, inSync, hasConflict };
-}
-
 // =============================================================================
 // Read Operations
 // =============================================================================
@@ -310,13 +255,6 @@ export async function getGamePakInfo(
   }
 
   return result;
-}
-
-/**
- * Read a game pak file
- */
-export async function readGamePak(filePath: string): Promise<Buffer> {
-  return readFile(filePath);
 }
 
 /**

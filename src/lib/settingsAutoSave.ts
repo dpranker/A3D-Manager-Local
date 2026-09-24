@@ -89,14 +89,6 @@ export function retrySave(cartId: string): Promise<void> {
   return runSave(cartId);
 }
 
-/** Whether any cartridge has a change waiting or a save running */
-export function hasPendingSaves(): boolean {
-  for (const state of carts.values()) {
-    if (state.pending || state.running) return true;
-  }
-  return false;
-}
-
 /**
  * Save the cartridge's waiting change, after any save already running for it.
  * Resolves when nothing is left to save for this cartridge (or the save failed).
