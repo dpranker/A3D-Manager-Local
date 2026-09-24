@@ -30,6 +30,7 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **Settings changes aren't lost when you quit.** Closing the desktop app first sends any settings change still waiting to be saved, and lets file transfers in progress finish (each with a time limit).
 - **Undoing a settings change within two seconds no longer saves the change.** Before, switching a setting and switching it back left the first change queued, and it was saved anyway.
 - **A failed settings save is kept and can be retried.** The Settings tab shows when changes are unsaved or saving, and a Retry button when a save fails. Saves for one cartridge no longer run at the same time.
+- **Failures are reported instead of looking like success.** Importing or resetting settings, and restoring a Controller Pak backup, now say when the local save worked but the SD card copy failed. Changing ownership (one cart or several) and removing a custom name show the error and leave things as they were.
 
 ## [0.1.0] - 2026-09-23
 

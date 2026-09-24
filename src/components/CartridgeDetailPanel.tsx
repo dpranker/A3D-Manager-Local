@@ -11,6 +11,7 @@ import { MemoriesTab } from './MemoriesTab';
 import { ScreenshotsTab } from './ScreenshotsTab';
 import { cartridgeShellColor } from '../lib/cartColors';
 import { cancelPendingSave, onSaveStatus, queueSettingsSave, retrySave } from '../lib/settingsAutoSave';
+import { apiFetch, apiPostJson, errorMessage } from '../lib/api';
 import {
   createDefaultSettings,
   valueLabel,
@@ -130,6 +131,7 @@ export function CartridgeDetailPanel({
 }: CartridgeDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('label');
   const [isOwned, setIsOwned] = useState(false);
+  const [ownershipError, setOwnershipError] = useState<string | null>(null);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
   // Follows the Settings tab's Cartridge Color live; starts with the grid's value
   const [currentShellColor, setCurrentShellColor] = useState(shellColor);
@@ -173,15 +175,14 @@ export function CartridgeDetailPanel({
 
   const handleToggleOwned = async (newValue: boolean) => {
     try {
-      if (newValue) {
-        await fetch(`/api/cartridges/owned/${cartId}`, { method: 'POST' });
-      } else {
-        await fetch(`/api/cartridges/owned/${cartId}`, { method: 'DELETE' });
-      }
+      setOwnershipError(null);
+      await apiFetch(`/api/cartridges/owned/${cartId}`, { method: newValue ? 'POST' : 'DELETE' });
       setIsOwned(newValue);
       onUpdate();
     } catch (err) {
+      // The toggle stays as it was: the change wasn't saved
       console.error('Failed to toggle ownership:', err);
+      setOwnershipError(`Ownership wasn't changed: ${errorMessage(err)}`);
     }
   };
 
@@ -280,6 +281,7 @@ export function CartridgeDetailPanel({
         </div>
 
         <div className="slide-over-content">
+          {ownershipError && <div className="error-message">{ownershipError}</div>}
           {activeTab === 'label' && (
             <LabelTab
               cartId={cartId}
@@ -489,11 +491,18 @@ function LabelTab({
         throw new Error(data.error || 'Delete failed');
       }
 
+      markLocalChanges(); // Mark that local labels have changed
+
       if (isUserCart) {
-        await fetch(`/api/labels/user-cart/${cartId}`, { method: 'DELETE' });
+        try {
+          await apiFetch(`/api/labels/user-cart/${cartId}`, { method: 'DELETE' });
+        } catch (err) {
+          // The label is gone; say so rather than closing as if the name went too
+          onDelete?.();
+          throw new Error(`The label was deleted, but the custom name wasn't removed: ${errorMessage(err)}`);
+        }
       }
 
-      markLocalChanges(); // Mark that local labels have changed
       onDelete?.();
       onClose();
     } catch (err) {
@@ -861,6 +870,16 @@ function SettingsTab({ cartId, sdCardPath, gameName, onCartridgeColorChange }: S
     }
   };
 
+  /** Copy the local settings to the card; returns an error to show, or null. The local save already happened. */
+  const copySettingsToCard = async (cardPath: string): Promise<string | null> => {
+    try {
+      await apiPostJson(`/api/cartridges/${cartId}/settings/upload`, { sdCardPath: cardPath });
+      return null;
+    } catch (err) {
+      return `Saved locally, but copying to the SD card failed: ${errorMessage(err)}`;
+    }
+  };
+
   const handleImportFile = async (file: File) => {
     try {
       setError(null);
@@ -876,16 +895,11 @@ function SettingsTab({ cartId, sdCardPath, gameName, onCartridgeColorChange }: S
       }
 
       // If connected, also upload to SD
-      if (syncPath) {
-        await fetch(`/api/cartridges/${cartId}/settings/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sdCardPath: syncPath }),
-        });
-      }
+      const cardError = syncPath ? await copySettingsToCard(syncPath) : null;
 
       await fetchInfo();
       setConflictState('resolved');
+      if (cardError) setError(cardError);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
     }
@@ -931,15 +945,10 @@ function SettingsTab({ cartId, sdCardPath, gameName, onCartridgeColorChange }: S
       }
 
       // If SD card connected, also sync to SD
-      if (syncPath) {
-        await fetch(`/api/cartridges/${cartId}/settings/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sdCardPath: syncPath }),
-        });
-      }
+      const cardError = syncPath ? await copySettingsToCard(syncPath) : null;
 
       await fetchInfo();
+      if (cardError) setError(cardError);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset settings');
     }
@@ -1820,7 +1829,11 @@ export function GamePakTab({ cartId, sdCardPath, gameName }: GamePakTabProps) {
         const data = await response.json();
         throw new Error(data.error || 'Failed to restore backup');
       }
+      const result = (await response.json()) as { sd: 'ok' | 'skipped' | { error: string } };
       await fetchInfo();
+      if (typeof result.sd === 'object') {
+        setError(`Restored locally, but copying to the SD card failed: ${result.sd.error}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restore backup');
     }
