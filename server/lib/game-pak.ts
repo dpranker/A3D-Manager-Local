@@ -2,7 +2,7 @@ import { readFile, stat, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { createHash, randomUUID } from 'crypto';
-import { findGameFolder, ensureLocalGameFolder, getLocalGamesDir } from './cartridge-settings.js';
+import { findGameFolder, ensureLocalGameFolder, ensureSdGameFolder, getLocalGamesDir } from './cartridge-settings.js';
 import { copyFileAtomic, updateJsonFile, writeFileAtomic } from './safe-write.js';
 
 // =============================================================================
@@ -413,7 +413,6 @@ export async function deleteLocalGamePak(cartId: string): Promise<boolean> {
 export async function uploadGamePakToSD(
   cartId: string,
   sdCardPath: string,
-  title: string = 'Unknown Cartridge'
 ): Promise<{ success: boolean; path?: string; error?: string }> {
   // Get local game pak
   const localPath = await getLocalGamePakPath(cartId);
@@ -428,19 +427,9 @@ export async function uploadGamePakToSD(
     return { success: false, error: `Invalid game pak: ${validation.errors.join(', ')}` };
   }
 
-  // Find or determine SD game folder
-  const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
-  let sdGameFolder = await findGameFolder(gamesDir, cartId);
-
-  if (!sdGameFolder) {
-    // Need to create the folder
-    const normalizedId = cartId.toLowerCase();
-    const folderName = `${title} ${normalizedId}`;
-    sdGameFolder = path.join(gamesDir, folderName);
-    await mkdir(sdGameFolder, { recursive: true });
-  }
-
   try {
+    // Named from the cart database like other uploads, not from the display title
+    const sdGameFolder = await ensureSdGameFolder(sdCardPath, cartId);
     const sdGamePakPath = path.join(sdGameFolder, GAME_PAK_FILENAME);
     // Atomic only: nothing extra is left in the console's game folder
     await copyFileAtomic(localPath, sdGamePakPath);
@@ -768,7 +757,7 @@ export async function restoreBackup(
 
   // Optionally restore to SD card
   if (sdCardPath) {
-    const sdResult = await uploadGamePakToSD(cartId, sdCardPath, title);
+    const sdResult = await uploadGamePakToSD(cartId, sdCardPath);
     result.sd = sdResult.success;
   }
 

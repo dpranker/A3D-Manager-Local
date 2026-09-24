@@ -933,8 +933,16 @@ router.delete('/:cartId', async (req, res) => {
   }
 });
 
-// GET /api/labels/compare/quick - Quick check if local and SD labels.db differ
-router.get('/compare/quick', async (_req, res) => {
+/** The selected card's labels.db; sdCardPath is required and checked by sdCardPathGuard */
+function sdLabelsPathFrom(query: unknown): string | null {
+  const sdCardPath = (query as { sdCardPath?: unknown })?.sdCardPath;
+  return typeof sdCardPath === 'string' && sdCardPath
+    ? path.join(sdCardPath, 'Library', 'N64', 'Images', 'labels.db')
+    : null;
+}
+
+// GET /api/labels/compare/quick?sdCardPath=... - Quick check if local and the selected card's labels.db differ
+router.get('/compare/quick', async (req, res) => {
   try {
     // Check if local labels.db exists
     const hasLocal = await hasLocalLabelsDb();
@@ -942,16 +950,12 @@ router.get('/compare/quick', async (_req, res) => {
       return res.status(400).json({ error: 'No local labels.db found' });
     }
 
-    // Check for SD card
-    const sdCards = await detectSDCards();
-    if (sdCards.length === 0) {
-      return res.status(400).json({ error: 'No SD card detected' });
+    const sdPath = sdLabelsPathFrom(req.query);
+    if (!sdPath) {
+      return res.status(400).json({ error: 'SD card path is required' });
     }
 
-    const localPath = getLocalLabelsDbPath();
-    const sdPath = sdCards[0].labelsDbPath;
-
-    const result = await compareQuick(localPath, sdPath);
+    const result = await compareQuick(getLocalLabelsDbPath(), sdPath);
 
     res.json(result);
   } catch (error) {
@@ -960,7 +964,7 @@ router.get('/compare/quick', async (_req, res) => {
   }
 });
 
-// GET /api/labels/compare/detailed - Detailed comparison showing all differences
+// GET /api/labels/compare/detailed?sdCardPath=... - Detailed comparison showing all differences
 router.get('/compare/detailed', async (req, res) => {
   try {
     const fullHash = req.query.fullHash === 'true';
@@ -971,16 +975,12 @@ router.get('/compare/detailed', async (req, res) => {
       return res.status(400).json({ error: 'No local labels.db found' });
     }
 
-    // Check for SD card
-    const sdCards = await detectSDCards();
-    if (sdCards.length === 0) {
-      return res.status(400).json({ error: 'No SD card detected' });
+    const sdPath = sdLabelsPathFrom(req.query);
+    if (!sdPath) {
+      return res.status(400).json({ error: 'SD card path is required' });
     }
 
-    const localPath = getLocalLabelsDbPath();
-    const sdPath = sdCards[0].labelsDbPath;
-
-    const result = await compareDetailed(localPath, sdPath, { fullImageHash: fullHash });
+    const result = await compareDetailed(getLocalLabelsDbPath(), sdPath, { fullImageHash: fullHash });
 
     res.json(result);
   } catch (error) {

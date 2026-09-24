@@ -691,7 +691,7 @@ router.post('/:cartId/game-pak/download', async (req, res) => {
  */
 router.post('/:cartId/game-pak/upload', async (req, res) => {
   const { cartId } = req.params;
-  const { sdCardPath, title } = req.body;
+  const { sdCardPath } = req.body;
 
   if (!/^[0-9a-fA-F]{8}$/.test(cartId)) {
     return res.status(400).json({ error: 'Invalid cart ID format' });
@@ -702,7 +702,7 @@ router.post('/:cartId/game-pak/upload', async (req, res) => {
   }
 
   try {
-    const result = await uploadGamePakToSD(cartId, sdCardPath, title);
+    const result = await uploadGamePakToSD(cartId, sdCardPath);
     if (result.success) {
       res.json({ success: true, path: result.path });
     } else {

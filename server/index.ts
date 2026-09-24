@@ -12,6 +12,7 @@ import localDataRouter from './routes/local-data.js';
 import firmwareRouter from './routes/firmware.js';
 import libraryRouter from './routes/library.js';
 import { removeLeftoverPartials } from './lib/safe-write.js';
+import { sdCardPathGuard } from './lib/request-guards.js';
 import screenshotsRouter from './routes/screenshots.js';
 
 export const app = express();
@@ -20,6 +21,8 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+// Any sdCardPath given to the API must be an Analogue 3D card
+app.use('/api', sdCardPathGuard);
 
 // Ensure local directory structure exists
 export async function ensureLocalDirs() {
