@@ -1,7 +1,8 @@
 # Desktop release: push a tag like v1.2.0 (or v1.2.0-rc.1 for a pre-release).
 # Builds the Electron app on each OS (sharp's native binary is per-platform, so
-# no cross-building), smoke-tests the packaged app, then attaches the installers
-# to a *draft* GitHub release for review. The version comes from the tag.
+# no cross-building), smoke-tests the packaged app, then attaches the builds
+# (Linux AppImage; Windows installer and portable .exe) to a *draft* GitHub
+# release for review. The version comes from the tag.
 name: Release
 
 on:
