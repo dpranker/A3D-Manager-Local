@@ -1,3 +1,4 @@
+import archiver from 'archiver';
 import { Router } from 'express';
 import path from 'path';
 import sharp from 'sharp';
@@ -71,6 +72,42 @@ router.get('/:cartId/image', async (req, res) => {
   } catch (error) {
     console.error('Error reading screenshot:', error);
     res.status(500).json({ error: 'Failed to read the screenshot' });
+  }
+});
+
+// GET /api/screenshots/:cartId/archive?sdCardPath=&kinds=memory - every matching file as one zip, unchanged
+router.get('/:cartId/archive', async (req, res) => {
+  const { cartId } = req.params;
+  const sdCardPath = queryString(req.query.sdCardPath);
+  const kinds = queryString(req.query.kinds)?.split(',') ?? [...CAPTURE_KINDS];
+  if (!CART_ID.test(cartId) || !sdCardPath) return res.status(400).json({ error: 'cartId and sdCardPath are required' });
+  if (!kinds.every(isKind)) return res.status(400).json({ error: `kinds must be from: ${CAPTURE_KINDS.join(', ')}` });
+
+  try {
+    const captures = await listCaptures(sdCardPath, cartId, kinds);
+    if (!captures.length) return res.status(404).json({ error: 'Nothing to back up' });
+
+    // Named after the console's folder, e.g. "Ogre Battle 64 Person of Lordly Caliber b372fa05 Memories.zip"
+    const folder = captures.find((c) => c.file.includes('/'))?.file.split('/')[0] ?? cartId;
+    const label = kinds.length === 1 && kinds[0] === 'memory' ? 'Memories' : 'Captures';
+    res.attachment(`${folder} ${label}.zip`);
+
+    // PNG data is already compressed; a light level still shrinks the save states
+    const archive = archiver('zip', { zlib: { level: 1 } });
+    archive.on('error', (error) => {
+      console.error('Error writing archive:', error);
+      res.destroy(error);
+    });
+    archive.pipe(res);
+    for (const capture of captures) {
+      const found = await findCapture(sdCardPath, cartId, capture.kind, capture.file);
+      if (found) archive.file(found.path, { name: path.basename(found.path) });
+    }
+    await archive.finalize();
+  } catch (error) {
+    console.error('Error archiving captures:', error);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to back up files' });
+    else res.destroy();
   }
 });
 
