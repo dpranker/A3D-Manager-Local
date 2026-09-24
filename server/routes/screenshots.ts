@@ -53,7 +53,7 @@ router.get('/:cartId/image', async (req, res) => {
 
     // HDR captures would lose their color data if re-encoded, so they're shown as they are
     if (variant === 'thumb' && !capture.info.hdr) {
-      const key = `${capture.path}:${capture.info.size}`;
+      const key = `${capture.path}:${capture.info.size}:${capture.info.modifiedMs}`;
       let thumb = thumbCache.get(key);
       if (!thumb) {
         // Console captures are 4:3 whatever their pixel size (320x240, 640x240, 1280x240, 640x480)

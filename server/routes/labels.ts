@@ -35,6 +35,14 @@ import {
 
 const router = Router();
 
+/**
+ * Benchmarks that write test files to the SD card's Debug folder: development only
+ * (npm run dev, or the Electron dev app), never in a release build or Docker.
+ */
+const DEBUG_ROUTES_ENABLED =
+  process.env.NODE_ENV !== 'production' && (!process.env.A3D_EMBEDDED || !!process.env.A3D_DEV_SERVER_URL);
+const debugRouter = Router();
+
 // Cart name database - enhanced format with metadata
 interface CartNameEntry {
   flashcartName?: string;
@@ -966,7 +974,7 @@ router.get('/compare/detailed', async (req, res) => {
 
 // GET /api/labels/debug/benchmark-stream - Run debug benchmark with SSE progress
 // This is the streaming version that provides real-time progress updates
-router.get('/debug/benchmark-stream', async (_req, res) => {
+debugRouter.get('/benchmark-stream', async (_req, res) => {
   // Check for SD card before setting up SSE
   const sdCards = await detectSDCards();
   if (sdCards.length === 0) {
@@ -1143,7 +1151,7 @@ router.get('/debug/benchmark-stream', async (_req, res) => {
 });
 
 // POST /api/labels/debug/sync - Sync changed entries from local to SD debug folder
-router.post('/debug/sync', async (_req, res) => {
+debugRouter.post('/sync', async (_req, res) => {
   try {
     const sdCards = await detectSDCards();
     if (sdCards.length === 0) {
@@ -1184,7 +1192,7 @@ const CHUNK_BENCHMARK_CONFIGS = [
 ];
 
 // GET /api/labels/debug/chunk-benchmark-stream - Benchmark different chunk sizes
-router.get('/debug/chunk-benchmark-stream', async (req, res) => {
+debugRouter.get('/chunk-benchmark-stream', async (req, res) => {
   const iterations = parseInt(req.query.iterations as string) || 2;
 
   // Check for SD card before setting up SSE
@@ -1348,5 +1356,9 @@ router.get('/debug/chunk-benchmark-stream', async (req, res) => {
 
   res.end();
 });
+
+if (DEBUG_ROUTES_ENABLED) {
+  router.use('/debug', debugRouter);
+}
 
 export default router;

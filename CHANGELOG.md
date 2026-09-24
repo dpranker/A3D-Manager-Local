@@ -36,6 +36,10 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 - **Unticking Game Pak backups when exporting now leaves them out.**
 - **Bundles are checked before anything is imported:** cartridge IDs, the labels database, Controller Pak saves, library details and the unpacked size. Entries that fail are skipped and listed, instead of being written or failing the whole import.
 - **Controller Pak saves are backed up automatically before they're replaced**, locally or on the SD card (importing, restoring, downloading, uploading or a bundle import). The replaced save appears in the backup list as "Automatic: …", unless an identical backup already exists.
+- **Choosing which labels to keep shows what differs.** When both this computer and the SD card have labels, the sync dialog lists the cartridges whose labels differ or exist on only one side.
+- **The debug benchmark is gone from release builds.** It wrote test files to the SD card and was shown in Settings for everyone; it's now only in development builds.
+- **Browser and Docker mode only answer the app's own pages.** Other websites can't call the local server, and it only answers on `localhost`, IP addresses, or names listed in `A3D_ALLOWED_HOSTS`. The desktop app already worked this way.
+- If deleting orphaned folders fails partway through, the folders already deleted still come off the owned list.
 
 ## [0.1.0] - 2026-09-23
 

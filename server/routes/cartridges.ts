@@ -138,12 +138,24 @@ router.post('/owned/cleanup-orphans/apply', async (req, res) => {
     const safeIds = [...new Set((cartIds as string[]).map((id) => id.toLowerCase()))]
       .filter((id) => byId.has(id));
     const deletedFolders: string[] = [];
+    const deletedIds: string[] = [];
+    let failure: string | null = null;
     for (const id of safeIds) {
       const folder = byId.get(id)!;
-      await rm(path.join(gamesDir, folder), { recursive: true });
+      try {
+        await rm(path.join(gamesDir, folder), { recursive: true });
+      } catch (error) {
+        failure = `${folder}: ${error instanceof Error ? error.message : String(error)}`;
+        break;
+      }
       deletedFolders.push(folder);
+      deletedIds.push(id);
     }
-    const removed = await removeOwnedCartridges(safeIds);
+    // Folders already deleted leave the owned list even if a later one failed
+    const removed = deletedIds.length ? await removeOwnedCartridges(deletedIds) : 0;
+    if (failure) {
+      return res.status(500).json({ error: `Couldn't delete ${failure}`, removed, deletedFolders });
+    }
     res.json({ removed, deletedFolders });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'Could not clean orphaned cartridges' });

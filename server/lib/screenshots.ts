@@ -37,6 +37,8 @@ export interface CaptureInfo {
   width: number;
   height: number;
   size: number;
+  /** File modification time (ms), so a replaced file isn't served from a stale cache */
+  modifiedMs: number;
   /** e.g. "1.5.0", from the Software tag */
   firmware: string | null;
   /** Display mode from Display Config, e.g. "PVM" or "Clean" */
@@ -149,7 +151,7 @@ async function describe(kind: CaptureKind, root: string, file: string, header: P
   const fullPath = path.join(root, file);
   header ??= await readPngHeader(fullPath).catch(() => null);
   if (!header) return null;
-  const { size } = await stat(fullPath);
+  const { size, mtimeMs } = await stat(fullPath);
   const { odm } = parseDisplayConfig(header.text['Display Config']);
   return {
     kind,
@@ -158,6 +160,7 @@ async function describe(kind: CaptureKind, root: string, file: string, header: P
     width: header.width,
     height: header.height,
     size,
+    modifiedMs: Math.round(mtimeMs),
     firmware: parseFirmware(header.text.Software),
     displayMode: typeof odm === 'string' ? odm : null,
     hdr: isHdrCapture(header),
