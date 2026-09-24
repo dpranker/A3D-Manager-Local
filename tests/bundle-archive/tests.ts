@@ -13,6 +13,91 @@ import AdmZip from 'adm-zip';
 // We need to dynamically import the bundle-archive module since it uses .js extension
 const bundleArchiveModule = await import('../../server/lib/bundle-archive.js');
 const { createBundle, parseBundle } = bundleArchiveModule;
+const { createEmptyGamePak } = await import('../../server/lib/game-pak.js');
+const { createEmptyLabelsDb } = await import('../../server/lib/labels-db-core.js');
+
+/** A bundle zip from name -> content (no disk access) */
+function makeBundle(files: Record<string, Buffer | string | object>): Buffer {
+  const zip = new AdmZip();
+  const manifest = { version: 1, createdAt: '2026-09-24T00:00:00Z', appVersion: 'test', contents: { hasLabelsDb: false, hasOwnedCarts: false, settingsCount: 0, gamePaksCount: 0, gamePakBackupsCount: 0, cartIds: [] } };
+  zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest)));
+  for (const [name, content] of Object.entries(files)) {
+    zip.addFile(name, Buffer.isBuffer(content) ? content : Buffer.from(typeof content === 'string' ? content : JSON.stringify(content)));
+  }
+  return zip.toBuffer();
+}
+
+/** Checks on bundle contents: these only parse, so they run everywhere */
+const validationTests = [
+  test('parseBundle keeps valid entries and reports nothing', async () => {
+    const bundle = await parseBundle(makeBundle({
+      'labels.db': createEmptyLabelsDb(),
+      'game-paks/1234abcd/controller_pak.img': createEmptyGamePak(),
+      'settings/1234abcd/settings.json': { $schema: 'x' },
+      'library/1234abcd/library.json': { data: {} },
+      'user-carts.json': [{ id: '1234abcd', name: 'Homebrew', addedAt: '2026-01-01' }],
+    }));
+    assert(!!bundle.labelsDb, 'labels.db kept');
+    assertEqual(bundle.gamePaks.size, 1);
+    assertEqual(bundle.settings.size, 1);
+    assertEqual(bundle.library.size, 1);
+    assertEqual(bundle.customNames?.length, 1);
+    assertEqual(bundle.problems.length, 0);
+  }),
+
+  test('parseBundle skips an invalid labels.db and Controller Pak', async () => {
+    const bundle = await parseBundle(makeBundle({
+      'labels.db': 'not a labels database',
+      'game-paks/1234abcd/controller_pak.img': Buffer.alloc(100, 1),
+    }));
+    assert(!bundle.labelsDb, 'invalid labels.db left out');
+    assertEqual(bundle.gamePaks.size, 0);
+    assertEqual(bundle.problems.length, 2);
+  }),
+
+  test('parseBundle skips entries without a valid cartridge ID', async () => {
+    const bundle = await parseBundle(makeBundle({
+      'labels/not-hex!.png': 'x',
+      'settings/abc/settings.json': { a: 1 },
+      'game-paks/zzzzzzzz/controller_pak.img': createEmptyGamePak(),
+      'game-pak-backups/12345/metadata.json': { backups: [] },
+      'owned-carts.json': { version: 1, cartridges: [{ cartId: '1234abcd' }, { cartId: '../x' }] },
+    }));
+    assertEqual(bundle.labels.size, 0);
+    assertEqual(bundle.settings.size, 0);
+    assertEqual(bundle.gamePaks.size, 0);
+    assertEqual(bundle.gamePakBackups.size, 0);
+    assertEqual(bundle.ownedCarts?.cartridges.length, 1);
+    assertEqual(bundle.problems.length, 5);
+  }),
+
+  test('parseBundle skips backup files with unexpected names', async () => {
+    const bundle = await parseBundle(makeBundle({
+      'game-pak-backups/1234abcd/metadata.json': { backups: [{ id: 'ok-id' }] },
+      'game-pak-backups/1234abcd/ok-id.img': createEmptyGamePak(),
+      'game-pak-backups/1234abcd/..img': createEmptyGamePak(),
+    }));
+    assertEqual([...bundle.gamePakBackups.get('1234abcd')!.files.keys()].join(','), 'ok-id');
+  }),
+
+  test('parseBundle reports bad JSON instead of failing the whole import', async () => {
+    const bundle = await parseBundle(makeBundle({
+      'settings/1234abcd/settings.json': '{ broken',
+      'user-carts.json': { not: 'an array' },
+    }));
+    assertEqual(bundle.settings.size, 0);
+    assert(!bundle.customNames, 'invalid custom names left out');
+    assertEqual(bundle.problems.length, 2);
+  }),
+
+  test('parseBundle rejects a bundle without a manifest', async () => {
+    const zip = new AdmZip();
+    zip.addFile('labels.db', createEmptyLabelsDb());
+    let failed = false;
+    await parseBundle(zip.toBuffer()).catch(() => (failed = true));
+    assert(failed, 'rejected');
+  }),
+];
 
 // Test paths
 const TEST_OUTPUT_DIR = path.join(process.cwd(), 'tests', 'bundle-archive', 'output');
@@ -31,7 +116,7 @@ const hasLocalGames = existsSync(TEST_GAMES_DIR);
 
 export const bundleArchiveSuite: TestSuite = {
   name: 'Bundle Archive',
-  tests: hasLocalGames ? [
+  tests: [...validationTests, ...(hasLocalGames ? [
     test('should export settings for selected cart IDs', async () => {
       // This test verifies that when we export with specific cartIds,
       // the settings from matching game folders are included
@@ -221,5 +306,5 @@ export const bundleArchiveSuite: TestSuite = {
       console.log('    Bundle archive tests require local game data in .local/Library/N64/Games');
       console.log('    These tests are skipped in CI and run only in development');
     }),
-  ],
+  ])],
 };
