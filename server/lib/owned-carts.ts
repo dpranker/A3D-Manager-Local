@@ -47,13 +47,6 @@ async function ensureLocalDir(): Promise<void> {
 }
 
 /**
- * Get the path to the owned carts file
- */
-export function getOwnedCartsPath(): string {
-  return OWNED_CARTS_PATH;
-}
-
-/**
  * Check if the owned carts file exists
  */
 export function hasOwnedCartsFile(): boolean {
@@ -115,15 +108,6 @@ export async function isCartridgeOwned(cartId: string): Promise<boolean> {
   const normalizedId = cartId.toLowerCase();
   const data = await loadOwnedCarts();
   return data.cartridges.some(c => c.cartId.toLowerCase() === normalizedId);
-}
-
-/**
- * Get ownership details for a cartridge
- */
-export async function getOwnedCartridge(cartId: string): Promise<OwnedCartridge | null> {
-  const normalizedId = cartId.toLowerCase();
-  const data = await loadOwnedCarts();
-  return data.cartridges.find(c => c.cartId.toLowerCase() === normalizedId) || null;
 }
 
 /**
@@ -202,21 +186,6 @@ export function clearOwnedCartridges(): Promise<number> {
     const count = data.cartridges.length;
     data.cartridges = [];
     return count;
-  });
-}
-
-/**
- * Replace all owned cartridges (useful for sync operations)
- */
-export function replaceOwnedCartridges(
-  cartIds: string[],
-  source: 'sd-card' | 'manual' = 'sd-card'
-): Promise<{ added: number; removed: number }> {
-  return mutateOwnedCarts((data) => {
-    const previousCount = data.cartridges.length;
-    const now = new Date().toISOString();
-    data.cartridges = cartIds.map(cartId => ({ cartId: cartId.toLowerCase(), addedAt: now, source }));
-    return { added: data.cartridges.length, removed: previousCount };
   });
 }
 

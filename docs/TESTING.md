@@ -45,8 +45,7 @@ server/lib/
 ├── cartridge-settings.ts   # Settings parsing/validation
 ├── game-pak.ts             # Controller pak operations
 ├── sd-card.ts              # SD card detection
-├── bundle-archive.ts       # Asset bundle handling
-└── tga.ts                  # TGA image format
+└── bundle-archive.ts       # Asset bundle handling
 ```
 
 ## Adding New Tests

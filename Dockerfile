@@ -39,6 +39,7 @@ COPY --chown=nodejs:nodejs --from=builder /app/dist ./dist
 
 # Copy server source (tsx runs TypeScript directly)
 COPY --chown=nodejs:nodejs --from=builder /app/server ./server
+COPY --chown=nodejs:nodejs --from=builder /app/shared ./shared
 
 # Copy tsconfig files for tsx
 COPY --chown=nodejs:nodejs --from=builder /app/tsconfig.json ./

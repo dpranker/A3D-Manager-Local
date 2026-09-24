@@ -11,10 +11,9 @@
  */
 
 import { readFile, mkdir, access, constants } from 'fs/promises';
-import { readFileSync } from 'fs';
 import path from 'path';
 import sharp from 'sharp';
-import { copyFileAtomic, withFileLock, writeFileAtomic } from './safe-write.js';
+import { withFileLock, writeFileAtomic } from './safe-write.js';
 
 // =============================================================================
 // Constants
@@ -203,22 +202,6 @@ export function parseLabelsDb(data: Buffer): LabelsDatabase {
     entries,
     idToIndex,
   };
-}
-
-/**
- * Parse a labels.db file from disk
- */
-export async function parseLabelsDbFile(filePath: string): Promise<LabelsDatabase> {
-  const data = await readFile(filePath);
-  return parseLabelsDb(data);
-}
-
-/**
- * Parse a labels.db file synchronously
- */
-export function parseLabelsDbFileSync(filePath: string): LabelsDatabase {
-  const data = readFileSync(filePath);
-  return parseLabelsDb(data);
 }
 
 // =============================================================================
@@ -553,51 +536,6 @@ export function deleteEntry(data: Buffer, cartId: number): Buffer {
   return newData;
 }
 
-// =============================================================================
-// File Operations
-// =============================================================================
-
-/**
- * Read a labels.db file from disk
- */
-export async function readLabelsDbFile(filePath: string): Promise<Buffer> {
-  return readFile(filePath);
-}
-
-/**
- * Write a labels.db buffer to disk
- */
-export async function writeLabelsDbFile(filePath: string, data: Buffer): Promise<void> {
-  await writeFileAtomic(filePath, data);
-}
-
-// =============================================================================
-// File-Path Based Operations (Convenience Wrappers)
-// =============================================================================
-
-/**
- * Get a label image as PNG buffer by cartridge ID (file-path based)
- */
-export async function getLabelImage(
-  labelsPath: string,
-  cartId: number
-): Promise<Buffer | null> {
-  const data = await readFile(labelsPath);
-  const image = await getImageByCartId(data, cartId);
-  return image?.png || null;
-}
-
-/**
- * Get a label image as PNG buffer by hex string cartridge ID (file-path based)
- */
-export async function getLabelImageByHex(
-  labelsPath: string,
-  cartIdHex: string
-): Promise<Buffer | null> {
-  const cartId = parseInt(cartIdHex, 16);
-  return getLabelImage(labelsPath, cartId);
-}
-
 /**
  * Update a label image in labels.db file
  */
@@ -638,33 +576,6 @@ export async function getAllEntries(labelsPath: string): Promise<LabelEntry[]> {
 }
 
 // =============================================================================
-// Export to SD Card
-// =============================================================================
-
-/**
- * Export local labels.db to SD card by copying the file
- */
-export async function exportLabelsToSD(sdLabelsPath: string): Promise<{ entryCount: number }> {
-  // Check if local labels.db exists
-  const hasLocal = await hasLocalLabelsDb();
-  if (!hasLocal) {
-    throw new Error('No local labels.db found. Import labels first.');
-  }
-
-  // Read local labels.db
-  const data = await readFile(LOCAL_LABELS_DB_PATH);
-  const db = parseLabelsDb(data);
-
-  // Ensure target directory exists
-  await mkdir(path.dirname(sdLabelsPath), { recursive: true });
-
-  // Copy to SD card (atomic; the card's previous labels.db is kept as labels.db.bak)
-  await withFileLock(LOCAL_LABELS_DB_PATH, () => copyFileAtomic(LOCAL_LABELS_DB_PATH, sdLabelsPath, { keepBackup: true }));
-
-  return { entryCount: db.entryCount };
-}
-
-// =============================================================================
 // Direct labels.db Storage (Experimental v2 API)
 // =============================================================================
 
@@ -687,38 +598,6 @@ export async function hasLocalLabelsDb(): Promise<boolean> {
  */
 export function getLocalLabelsDbPath(): string {
   return LOCAL_LABELS_DB_PATH;
-}
-
-/**
- * Import a labels.db file by copying it to local storage
- * Returns metadata about the imported file
- */
-export async function importLabelsDbFile(sourcePath: string): Promise<{
-  success: boolean;
-  entryCount: number;
-  fileSize: number;
-  importedAt: string;
-}> {
-  return withFileLock(LOCAL_LABELS_DB_PATH, async () => {
-    // Ensure parent directory exists
-    await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
-
-    // Check the file before it replaces the local database (kept as labels.db.bak)
-    const data = await readFile(sourcePath);
-    const headerCheck = verifyHeader(data);
-    if (!headerCheck.valid) {
-      throw new Error(`Invalid labels.db file: ${headerCheck.error}`);
-    }
-    await writeFileAtomic(LOCAL_LABELS_DB_PATH, data, { keepBackup: true });
-    const db = parseLabelsDb(data);
-
-    return {
-      success: true,
-      entryCount: db.entryCount,
-      fileSize: data.length,
-      importedAt: new Date().toISOString(),
-    };
-  });
 }
 
 /**
@@ -801,40 +680,6 @@ export async function getAllLocalLabelsDbEntries(): Promise<Array<{ cartId: stri
     cartId: e.cartIdHex,
     index: e.index,
   }));
-}
-
-/**
- * Get paginated entries from labels.db (metadata only, no images)
- */
-export async function getLabelsDbPage(
-  page: number,
-  pageSize: number
-): Promise<{
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  totalEntries: number;
-  entries: Array<{ cartId: string; index: number }>;
-} | null> {
-  const result = await readLocalLabelsDb();
-  if (!result) return null;
-
-  const { db } = result;
-  const start = page * pageSize;
-  const end = Math.min(start + pageSize, db.entryCount);
-
-  const entries = db.entries.slice(start, end).map(e => ({
-    cartId: e.cartIdHex,
-    index: e.index,
-  }));
-
-  return {
-    page,
-    pageSize,
-    totalPages: Math.ceil(db.entryCount / pageSize),
-    totalEntries: db.entryCount,
-    entries,
-  };
 }
 
 /**
