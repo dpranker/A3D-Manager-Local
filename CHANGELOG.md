@@ -17,6 +17,14 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 
 - The firmware check shows smoother feedback while checking.
 
+### Fixed
+
+- **Interrupted transfers no longer damage files.** Everything the app writes, locally and to the SD card (labels, settings, `library.json`, Controller Pak saves, ownership and custom names), is written to a temporary file first and only then swapped in. If the app closes or the card is pulled mid-transfer, the previous file is still there, whole.
+- **Replaced files are kept.** Syncing labels keeps the previous `labels.db` as `labels.db.bak`, on the card and locally. Replacing a local Controller Pak save keeps the old one as `controller_pak.img.bak`.
+- **Downloading labels from the SD card checks the file first**, so an invalid `labels.db` on the card can't replace your local labels.
+- **Your owned list and custom names can't be wiped by a damaged file.** If `owned-carts.json` or `user-carts.json` can't be read, it's kept as a `.corrupt-<time>` copy and the change shows an error, instead of the next change overwriting it with an empty list.
+- **Simultaneous changes no longer overwrite each other** (ownership, custom names, label edits, Controller Pak backups).
+
 ## [0.1.0] - 2026-09-23
 
 First release of A3D Manager Local, a fork of [TheLeggett/A3D-Manager](https://github.com/TheLeggett/A3D-Manager). See the [README](https://github.com/dpranker/A3D-Manager-Local#readme) for the full feature list and install instructions.

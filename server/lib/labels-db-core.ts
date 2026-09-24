@@ -10,10 +10,11 @@
  * 3. Replace existing ad-hoc implementations
  */
 
-import { readFile, writeFile, copyFile, mkdir, access, constants } from 'fs/promises';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFile, mkdir, access, constants } from 'fs/promises';
+import { readFileSync } from 'fs';
 import path from 'path';
 import sharp from 'sharp';
+import { copyFileAtomic, withFileLock, writeFileAtomic } from './safe-write.js';
 
 // =============================================================================
 // Constants
@@ -567,14 +568,7 @@ export async function readLabelsDbFile(filePath: string): Promise<Buffer> {
  * Write a labels.db buffer to disk
  */
 export async function writeLabelsDbFile(filePath: string, data: Buffer): Promise<void> {
-  await writeFile(filePath, data);
-}
-
-/**
- * Write a labels.db buffer to disk synchronously
- */
-export function writeLabelsDbFileSync(filePath: string, data: Buffer): void {
-  writeFileSync(filePath, data);
+  await writeFileAtomic(filePath, data);
 }
 
 // =============================================================================
@@ -612,9 +606,11 @@ export async function updateLabelImage(
   cartId: number,
   imageBuffer: Buffer
 ): Promise<void> {
-  const data = await readFile(labelsPath);
-  const updatedData = await updateEntry(data, cartId, imageBuffer);
-  await writeFile(labelsPath, updatedData);
+  return withFileLock(labelsPath, async () => {
+    const data = await readFile(labelsPath);
+    const updatedData = await updateEntry(data, cartId, imageBuffer);
+    await writeFileAtomic(labelsPath, updatedData);
+  });
 }
 
 /**
@@ -625,9 +621,11 @@ export async function addCartridge(
   cartId: number,
   imageBuffer: Buffer
 ): Promise<void> {
-  const data = await readFile(labelsPath);
-  const updatedData = await addEntry(data, cartId, imageBuffer);
-  await writeFile(labelsPath, updatedData);
+  return withFileLock(labelsPath, async () => {
+    const data = await readFile(labelsPath);
+    const updatedData = await addEntry(data, cartId, imageBuffer);
+    await writeFileAtomic(labelsPath, updatedData);
+  });
 }
 
 /**
@@ -660,8 +658,8 @@ export async function exportLabelsToSD(sdLabelsPath: string): Promise<{ entryCou
   // Ensure target directory exists
   await mkdir(path.dirname(sdLabelsPath), { recursive: true });
 
-  // Copy to SD card
-  await copyFile(LOCAL_LABELS_DB_PATH, sdLabelsPath);
+  // Copy to SD card (atomic; the card's previous labels.db is kept as labels.db.bak)
+  await withFileLock(LOCAL_LABELS_DB_PATH, () => copyFileAtomic(LOCAL_LABELS_DB_PATH, sdLabelsPath, { keepBackup: true }));
 
   return { entryCount: db.entryCount };
 }
@@ -701,22 +699,26 @@ export async function importLabelsDbFile(sourcePath: string): Promise<{
   fileSize: number;
   importedAt: string;
 }> {
-  // Ensure parent directory exists
-  await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
+  return withFileLock(LOCAL_LABELS_DB_PATH, async () => {
+    // Ensure parent directory exists
+    await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
 
-  // Copy the file
-  await copyFile(sourcePath, LOCAL_LABELS_DB_PATH);
+    // Check the file before it replaces the local database (kept as labels.db.bak)
+    const data = await readFile(sourcePath);
+    const headerCheck = verifyHeader(data);
+    if (!headerCheck.valid) {
+      throw new Error(`Invalid labels.db file: ${headerCheck.error}`);
+    }
+    await writeFileAtomic(LOCAL_LABELS_DB_PATH, data, { keepBackup: true });
+    const db = parseLabelsDb(data);
 
-  // Parse to get entry count
-  const data = await readFile(LOCAL_LABELS_DB_PATH);
-  const db = parseLabelsDb(data);
-
-  return {
-    success: true,
-    entryCount: db.entryCount,
-    fileSize: data.length,
-    importedAt: new Date().toISOString(),
-  };
+    return {
+      success: true,
+      entryCount: db.entryCount,
+      fileSize: data.length,
+      importedAt: new Date().toISOString(),
+    };
+  });
 }
 
 /**
@@ -729,27 +731,29 @@ export async function importLabelsDbFileFromBuffer(buffer: Buffer): Promise<{
   fileSize: number;
   importedAt: string;
 }> {
-  // Verify header before saving
-  const headerCheck = verifyHeader(buffer);
-  if (!headerCheck.valid) {
-    throw new Error(`Invalid labels.db file: ${headerCheck.error}`);
-  }
+  return withFileLock(LOCAL_LABELS_DB_PATH, async () => {
+    // Verify header before saving
+    const headerCheck = verifyHeader(buffer);
+    if (!headerCheck.valid) {
+      throw new Error(`Invalid labels.db file: ${headerCheck.error}`);
+    }
 
-  // Ensure parent directory exists
-  await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
+    // Ensure parent directory exists
+    await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
 
-  // Write the buffer to disk
-  await writeFile(LOCAL_LABELS_DB_PATH, buffer);
+    // Write the buffer to disk; the database being replaced is kept as labels.db.bak
+    await writeFileAtomic(LOCAL_LABELS_DB_PATH, buffer, { keepBackup: true });
 
-  // Parse to get entry count
-  const db = parseLabelsDb(buffer);
+    // Parse to get entry count
+    const db = parseLabelsDb(buffer);
 
-  return {
-    success: true,
-    entryCount: db.entryCount,
-    fileSize: buffer.length,
-    importedAt: new Date().toISOString(),
-  };
+    return {
+      success: true,
+      entryCount: db.entryCount,
+      fileSize: buffer.length,
+      importedAt: new Date().toISOString(),
+    };
+  });
 }
 
 /**
@@ -929,39 +933,43 @@ export async function addEntryToLabelsDb(
   cartId: number,
   imageBuffer: Buffer
 ): Promise<void> {
-  // Ensure parent directory exists
-  await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
+  return withFileLock(LOCAL_LABELS_DB_PATH, async () => {
+    // Ensure parent directory exists
+    await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
 
-  let data: Buffer;
+    let data: Buffer;
 
-  // Check if labels.db exists
-  try {
-    await access(LOCAL_LABELS_DB_PATH, constants.R_OK);
-    data = await readFile(LOCAL_LABELS_DB_PATH);
-  } catch {
-    // Create empty labels.db
-    data = createEmptyLabelsDb();
-  }
+    // Check if labels.db exists
+    try {
+      await access(LOCAL_LABELS_DB_PATH, constants.R_OK);
+      data = await readFile(LOCAL_LABELS_DB_PATH);
+    } catch {
+      // Create empty labels.db
+      data = createEmptyLabelsDb();
+    }
 
-  // Add the entry
-  const updatedData = await addEntry(data, cartId, imageBuffer);
+    // Add the entry
+    const updatedData = await addEntry(data, cartId, imageBuffer);
 
-  // Write back to disk
-  await writeFile(LOCAL_LABELS_DB_PATH, updatedData);
+    // Write back to disk
+    await writeFileAtomic(LOCAL_LABELS_DB_PATH, updatedData);
+  });
 }
 
 /**
  * Delete an entry from the local labels.db file
  */
 export async function deleteEntryFromLabelsDb(cartId: number): Promise<void> {
-  // Read existing labels.db
-  const data = await readFile(LOCAL_LABELS_DB_PATH);
+  return withFileLock(LOCAL_LABELS_DB_PATH, async () => {
+    // Read existing labels.db
+    const data = await readFile(LOCAL_LABELS_DB_PATH);
 
-  // Delete the entry
-  const updatedData = deleteEntry(data, cartId);
+    // Delete the entry
+    const updatedData = deleteEntry(data, cartId);
 
-  // Write back to disk
-  await writeFile(LOCAL_LABELS_DB_PATH, updatedData);
+    // Write back to disk
+    await writeFileAtomic(LOCAL_LABELS_DB_PATH, updatedData);
+  });
 }
 
 /**
@@ -972,35 +980,37 @@ export async function updateEntryInLabelsDb(
   cartId: number,
   imageBuffer: Buffer
 ): Promise<void> {
-  // Ensure parent directory exists
-  await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
+  return withFileLock(LOCAL_LABELS_DB_PATH, async () => {
+    // Ensure parent directory exists
+    await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
 
-  let data: Buffer;
+    let data: Buffer;
 
-  // Check if labels.db exists
-  try {
-    await access(LOCAL_LABELS_DB_PATH, constants.R_OK);
-    data = await readFile(LOCAL_LABELS_DB_PATH);
-  } catch {
-    // Create empty labels.db
-    data = createEmptyLabelsDb();
-  }
+    // Check if labels.db exists
+    try {
+      await access(LOCAL_LABELS_DB_PATH, constants.R_OK);
+      data = await readFile(LOCAL_LABELS_DB_PATH);
+    } catch {
+      // Create empty labels.db
+      data = createEmptyLabelsDb();
+    }
 
-  // Check if entry exists - if not, add it; if yes, update it
-  const db = parseLabelsDb(data);
-  const entryExists = db.idToIndex.has(cartId);
+    // Check if entry exists - if not, add it; if yes, update it
+    const db = parseLabelsDb(data);
+    const entryExists = db.idToIndex.has(cartId);
 
-  let updatedData: Buffer;
-  if (!entryExists) {
-    // Entry doesn't exist, add it
-    updatedData = await addEntry(data, cartId, imageBuffer);
-  } else {
-    // Entry exists, update it
-    updatedData = await updateEntry(data, cartId, imageBuffer);
-  }
+    let updatedData: Buffer;
+    if (!entryExists) {
+      // Entry doesn't exist, add it
+      updatedData = await addEntry(data, cartId, imageBuffer);
+    } else {
+      // Entry exists, update it
+      updatedData = await updateEntry(data, cartId, imageBuffer);
+    }
 
-  // Write back to disk
-  await writeFile(LOCAL_LABELS_DB_PATH, updatedData);
+    // Write back to disk
+    await writeFileAtomic(LOCAL_LABELS_DB_PATH, updatedData);
+  });
 }
 
 /**
@@ -1020,135 +1030,137 @@ export async function mergeLabelsDbFromBuffer(
   updated: number;
   skipped: number;
 }> {
-  // Verify incoming file is valid
-  const headerCheck = verifyHeader(buffer);
-  if (!headerCheck.valid) {
-    throw new Error(`Invalid labels.db file: ${headerCheck.error}`);
-  }
+  return withFileLock(LOCAL_LABELS_DB_PATH, async () => {
+    // Verify incoming file is valid
+    const headerCheck = verifyHeader(buffer);
+    if (!headerCheck.valid) {
+      throw new Error(`Invalid labels.db file: ${headerCheck.error}`);
+    }
 
-  // Parse the incoming database
-  const incomingDb = parseLabelsDb(buffer);
+    // Parse the incoming database
+    const incomingDb = parseLabelsDb(buffer);
 
-  // Check if local labels.db exists
-  let localData: Buffer;
-  let localDb: LabelsDatabase;
+    // Check if local labels.db exists
+    let localData: Buffer;
+    let localDb: LabelsDatabase;
 
-  try {
-    await access(LOCAL_LABELS_DB_PATH, constants.R_OK);
-    localData = await readFile(LOCAL_LABELS_DB_PATH);
-    localDb = parseLabelsDb(localData);
-  } catch {
-    // No existing labels.db - just do a straight import
-    await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
-    await writeFile(LOCAL_LABELS_DB_PATH, buffer);
-    return {
-      success: true,
-      entryCount: incomingDb.entryCount,
-      fileSize: buffer.length,
-      importedAt: new Date().toISOString(),
-      added: incomingDb.entryCount,
-      updated: 0,
-      skipped: 0,
-    };
-  }
+    try {
+      await access(LOCAL_LABELS_DB_PATH, constants.R_OK);
+      localData = await readFile(LOCAL_LABELS_DB_PATH);
+      localDb = parseLabelsDb(localData);
+    } catch {
+      // No existing labels.db - just do a straight import
+      await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
+      await writeFileAtomic(LOCAL_LABELS_DB_PATH, buffer);
+      return {
+        success: true,
+        entryCount: incomingDb.entryCount,
+        fileSize: buffer.length,
+        importedAt: new Date().toISOString(),
+        added: incomingDb.entryCount,
+        updated: 0,
+        skipped: 0,
+      };
+    }
 
-  // Merge the databases
-  let resultData = localData;
-  let added = 0;
-  let updated = 0;
-  let skipped = 0;
+    // Merge the databases
+    let resultData = localData;
+    let added = 0;
+    let updated = 0;
+    let skipped = 0;
 
-  for (const entry of incomingDb.entries) {
-    const existsInLocal = localDb.idToIndex.has(entry.cartId);
+    for (const entry of incomingDb.entries) {
+      const existsInLocal = localDb.idToIndex.has(entry.cartId);
 
-    if (existsInLocal) {
-      if (mode === 'merge-overwrite') {
-        // Extract raw image from incoming buffer and update
+      if (existsInLocal) {
+        if (mode === 'merge-overwrite') {
+          // Extract raw image from incoming buffer and update
+          const rawBgra = extractRawImage(buffer, entry.index);
+          const slot = createImageSlot(rawBgra);
+
+          // Find the index in local and update
+          const localIndex = localDb.idToIndex.get(entry.cartId)!;
+          slot.copy(resultData, DATA_START + localIndex * IMAGE_SLOT_SIZE);
+          updated++;
+        } else {
+          // merge-skip: don't update existing
+          skipped++;
+        }
+      } else {
+        // Entry doesn't exist - add it
         const rawBgra = extractRawImage(buffer, entry.index);
+        // Need to convert to a format addEntry can use - addEntry expects an image buffer
+        // Create a minimal image buffer from the raw BGRA
         const slot = createImageSlot(rawBgra);
 
-        // Find the index in local and update
-        const localIndex = localDb.idToIndex.get(entry.cartId)!;
-        slot.copy(resultData, DATA_START + localIndex * IMAGE_SLOT_SIZE);
-        updated++;
-      } else {
-        // merge-skip: don't update existing
-        skipped++;
-      }
-    } else {
-      // Entry doesn't exist - add it
-      const rawBgra = extractRawImage(buffer, entry.index);
-      // Need to convert to a format addEntry can use - addEntry expects an image buffer
-      // Create a minimal image buffer from the raw BGRA
-      const slot = createImageSlot(rawBgra);
+        // We need to add this entry to the result
+        // Unfortunately addEntry expects a PNG/image buffer, not raw BGRA
+        // Let's work directly with the buffer instead
 
-      // We need to add this entry to the result
-      // Unfortunately addEntry expects a PNG/image buffer, not raw BGRA
-      // Let's work directly with the buffer instead
+        // Re-parse current state
+        const currentDb = parseLabelsDb(resultData);
 
-      // Re-parse current state
-      const currentDb = parseLabelsDb(resultData);
-
-      // Find insertion point
-      let insertIndex = 0;
-      for (let i = 0; i < currentDb.entries.length; i++) {
-        if (currentDb.entries[i].cartId > entry.cartId) {
-          break;
+        // Find insertion point
+        let insertIndex = 0;
+        for (let i = 0; i < currentDb.entries.length; i++) {
+          if (currentDb.entries[i].cartId > entry.cartId) {
+            break;
+          }
+          insertIndex = i + 1;
         }
-        insertIndex = i + 1;
+
+        // Allocate new buffer
+        const newSize = resultData.length + IMAGE_SLOT_SIZE;
+        const newData = Buffer.alloc(newSize, PADDING_FILL);
+
+        // Copy header
+        resultData.copy(newData, 0, 0, HEADER_SIZE);
+
+        // Write ID table with new entry inserted
+        for (let i = 0; i < insertIndex; i++) {
+          newData.writeUInt32LE(currentDb.entries[i].cartId, ID_TABLE_START + i * 4);
+        }
+        newData.writeUInt32LE(entry.cartId, ID_TABLE_START + insertIndex * 4);
+        for (let i = insertIndex; i < currentDb.entries.length; i++) {
+          newData.writeUInt32LE(currentDb.entries[i].cartId, ID_TABLE_START + (i + 1) * 4);
+        }
+
+        // Copy image data with new image inserted
+        for (let i = 0; i < insertIndex; i++) {
+          const srcOffset = DATA_START + i * IMAGE_SLOT_SIZE;
+          const dstOffset = DATA_START + i * IMAGE_SLOT_SIZE;
+          resultData.copy(newData, dstOffset, srcOffset, srcOffset + IMAGE_SLOT_SIZE);
+        }
+
+        // Insert new image
+        slot.copy(newData, DATA_START + insertIndex * IMAGE_SLOT_SIZE);
+
+        // Copy remaining images
+        for (let i = insertIndex; i < currentDb.entries.length; i++) {
+          const srcOffset = DATA_START + i * IMAGE_SLOT_SIZE;
+          const dstOffset = DATA_START + (i + 1) * IMAGE_SLOT_SIZE;
+          resultData.copy(newData, dstOffset, srcOffset, srcOffset + IMAGE_SLOT_SIZE);
+        }
+
+        resultData = newData;
+        added++;
       }
-
-      // Allocate new buffer
-      const newSize = resultData.length + IMAGE_SLOT_SIZE;
-      const newData = Buffer.alloc(newSize, PADDING_FILL);
-
-      // Copy header
-      resultData.copy(newData, 0, 0, HEADER_SIZE);
-
-      // Write ID table with new entry inserted
-      for (let i = 0; i < insertIndex; i++) {
-        newData.writeUInt32LE(currentDb.entries[i].cartId, ID_TABLE_START + i * 4);
-      }
-      newData.writeUInt32LE(entry.cartId, ID_TABLE_START + insertIndex * 4);
-      for (let i = insertIndex; i < currentDb.entries.length; i++) {
-        newData.writeUInt32LE(currentDb.entries[i].cartId, ID_TABLE_START + (i + 1) * 4);
-      }
-
-      // Copy image data with new image inserted
-      for (let i = 0; i < insertIndex; i++) {
-        const srcOffset = DATA_START + i * IMAGE_SLOT_SIZE;
-        const dstOffset = DATA_START + i * IMAGE_SLOT_SIZE;
-        resultData.copy(newData, dstOffset, srcOffset, srcOffset + IMAGE_SLOT_SIZE);
-      }
-
-      // Insert new image
-      slot.copy(newData, DATA_START + insertIndex * IMAGE_SLOT_SIZE);
-
-      // Copy remaining images
-      for (let i = insertIndex; i < currentDb.entries.length; i++) {
-        const srcOffset = DATA_START + i * IMAGE_SLOT_SIZE;
-        const dstOffset = DATA_START + (i + 1) * IMAGE_SLOT_SIZE;
-        resultData.copy(newData, dstOffset, srcOffset, srcOffset + IMAGE_SLOT_SIZE);
-      }
-
-      resultData = newData;
-      added++;
     }
-  }
 
-  // Write result to disk
-  await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
-  await writeFile(LOCAL_LABELS_DB_PATH, resultData);
+    // Write result to disk
+    await mkdir(path.dirname(LOCAL_LABELS_DB_PATH), { recursive: true });
+    await writeFileAtomic(LOCAL_LABELS_DB_PATH, resultData, { keepBackup: true });
 
-  const finalDb = parseLabelsDb(resultData);
+    const finalDb = parseLabelsDb(resultData);
 
-  return {
-    success: true,
-    entryCount: finalDb.entryCount,
-    fileSize: resultData.length,
-    importedAt: new Date().toISOString(),
-    added,
-    updated,
-    skipped,
-  };
+    return {
+      success: true,
+      entryCount: finalDb.entryCount,
+      fileSize: resultData.length,
+      importedAt: new Date().toISOString(),
+      added,
+      updated,
+      skipped,
+    };
+  });
 }

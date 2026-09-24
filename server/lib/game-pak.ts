@@ -1,8 +1,9 @@
-import { readFile, writeFile, stat, copyFile, unlink, mkdir } from 'fs/promises';
+import { readFile, stat, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { createHash, randomUUID } from 'crypto';
 import { findGameFolder, ensureLocalGameFolder, getLocalGamesDir } from './cartridge-settings.js';
+import { copyFileAtomic, updateJsonFile, writeFileAtomic } from './safe-write.js';
 
 // =============================================================================
 // Constants
@@ -351,7 +352,8 @@ export async function saveLocalGamePak(
   const folderPath = await ensureLocalGameFolder(cartId, title);
   const gamePakPath = path.join(folderPath, GAME_PAK_FILENAME);
 
-  await writeFile(gamePakPath, buffer);
+  // The save being replaced is kept as controller_pak.img.bak
+  await writeFileAtomic(gamePakPath, buffer, { keepBackup: true });
 
   return gamePakPath;
 }
@@ -380,7 +382,7 @@ export async function downloadGamePakFromSD(
     const folderPath = await ensureLocalGameFolder(cartId, title);
     const localPath = path.join(folderPath, GAME_PAK_FILENAME);
 
-    await copyFile(sdGamePakPath, localPath);
+    await copyFileAtomic(sdGamePakPath, localPath, { keepBackup: true });
 
     return { success: true, path: localPath };
   } catch (error) {
@@ -440,7 +442,8 @@ export async function uploadGamePakToSD(
 
   try {
     const sdGamePakPath = path.join(sdGameFolder, GAME_PAK_FILENAME);
-    await copyFile(localPath, sdGamePakPath);
+    // Atomic only: nothing extra is left in the console's game folder
+    await copyFileAtomic(localPath, sdGamePakPath);
     return { success: true, path: sdGamePakPath };
   } catch (error) {
     return {
@@ -591,15 +594,24 @@ export async function getBackupsMetadata(cartId: string): Promise<GamePakBackups
   }
 }
 
-/**
- * Save backups metadata for a cartridge
- */
-export async function saveBackupsMetadata(cartId: string, metadata: GamePakBackupsMetadata): Promise<void> {
-  const backupsDir = getBackupsDir(cartId);
-  await mkdir(backupsDir, { recursive: true });
+const isBackupsMetadata = (value: unknown): value is GamePakBackupsMetadata =>
+  !!value && typeof value === 'object' && Array.isArray((value as GamePakBackupsMetadata).backups);
 
-  const metadataPath = getBackupsMetadataPath(cartId);
-  await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+/**
+ * Change a cartridge's backups metadata: one change at a time, written atomically.
+ * An unreadable metadata file is kept as metadata.json.corrupt-<time> and the change fails.
+ */
+async function mutateBackupsMetadata<R>(
+  cartId: string,
+  change: (metadata: GamePakBackupsMetadata) => R | Promise<R>,
+): Promise<R> {
+  await mkdir(getBackupsDir(cartId), { recursive: true });
+  return updateJsonFile(
+    getBackupsMetadataPath(cartId),
+    (): GamePakBackupsMetadata => ({ version: 1, cartId: cartId.toLowerCase(), backups: [] }),
+    change,
+    isBackupsMetadata,
+  );
 }
 
 /**
@@ -651,16 +663,12 @@ export async function createBackup(
 
   // Write backup file
   const backupPath = path.join(backupsDir, `${id}.img`);
-  await writeFile(backupPath, localBuffer);
+  await writeFileAtomic(backupPath, localBuffer);
 
   // Update metadata
-  const metadata = await getBackupsMetadata(cartId) || {
-    version: 1 as const,
-    cartId: cartId.toLowerCase(),
-    backups: [],
-  };
-  metadata.backups.push(backup);
-  await saveBackupsMetadata(cartId, metadata);
+  await mutateBackupsMetadata(cartId, (metadata) => {
+    metadata.backups.push(backup);
+  });
 
   return backup;
 }
@@ -687,45 +695,42 @@ export async function updateBackup(
   backupId: string,
   updates: { name?: string; description?: string }
 ): Promise<GamePakBackup | null> {
-  const metadata = await getBackupsMetadata(cartId);
-  if (!metadata) {
+  if (!(await getBackupsMetadata(cartId))) {
     return null;
   }
 
-  const backupIndex = metadata.backups.findIndex(b => b.id === backupId);
-  if (backupIndex === -1) {
-    return null;
-  }
+  return mutateBackupsMetadata(cartId, (metadata) => {
+    const backup = metadata.backups.find(b => b.id === backupId);
+    if (!backup) return null;
 
-  // Update fields
-  if (updates.name !== undefined) {
-    metadata.backups[backupIndex].name = updates.name;
-  }
-  if (updates.description !== undefined) {
-    metadata.backups[backupIndex].description = updates.description;
-  }
-
-  await saveBackupsMetadata(cartId, metadata);
-  return metadata.backups[backupIndex];
+    if (updates.name !== undefined) {
+      backup.name = updates.name;
+    }
+    if (updates.description !== undefined) {
+      backup.description = updates.description;
+    }
+    return backup;
+  });
 }
 
 /**
  * Delete a backup
  */
 export async function deleteBackup(cartId: string, backupId: string): Promise<boolean> {
-  const metadata = await getBackupsMetadata(cartId);
-  if (!metadata) {
-    return false;
-  }
-
-  const backupIndex = metadata.backups.findIndex(b => b.id === backupId);
-  if (backupIndex === -1) {
+  if (!(await getBackupsMetadata(cartId))) {
     return false;
   }
 
   // Remove from metadata
-  metadata.backups.splice(backupIndex, 1);
-  await saveBackupsMetadata(cartId, metadata);
+  const removed = await mutateBackupsMetadata(cartId, (metadata) => {
+    const backupIndex = metadata.backups.findIndex(b => b.id === backupId);
+    if (backupIndex === -1) return false;
+    metadata.backups.splice(backupIndex, 1);
+    return true;
+  });
+  if (!removed) {
+    return false;
+  }
 
   // Delete the backup file
   const backupsDir = getBackupsDir(cartId);
@@ -823,68 +828,52 @@ export async function importBackups(
 ): Promise<{ added: number; skipped: number; merged: number }> {
   const result = { added: 0, skipped: 0, merged: 0 };
 
-  // Get existing metadata
-  let existingMetadata = await getBackupsMetadata(cartId);
-  if (!existingMetadata) {
-    existingMetadata = {
-      version: 1,
-      cartId: cartId.toLowerCase(),
-      backups: [],
-    };
-  }
+  await mutateBackupsMetadata(cartId, async (existingMetadata) => {
+    // Build a set of existing hashes for deduplication
+    const existingHashes = new Set(existingMetadata.backups.map(b => b.md5Hash));
 
-  // Build a set of existing hashes for deduplication
-  const existingHashes = new Set(existingMetadata.backups.map(b => b.md5Hash));
-
-  // Process each backup from import
-  for (const backup of importMetadata.backups) {
-    const buffer = files.get(backup.id);
-    if (!buffer) {
-      result.skipped++;
-      continue;
-    }
-
-    // Check for duplicate by hash
-    if (existingHashes.has(backup.md5Hash)) {
-      if (mergeStrategy === 'skip') {
+    // Process each backup from import
+    for (const backup of importMetadata.backups) {
+      const buffer = files.get(backup.id);
+      if (!buffer) {
         result.skipped++;
         continue;
       }
-      // For merge, we still skip if hash matches (no point in duplicate data)
-      result.merged++;
-      continue;
+
+      // Check for duplicate by hash
+      if (existingHashes.has(backup.md5Hash)) {
+        if (mergeStrategy === 'skip') {
+          result.skipped++;
+          continue;
+        }
+        // For merge, we still skip if hash matches (no point in duplicate data)
+        result.merged++;
+        continue;
+      }
+
+      // Validate the buffer
+      const validation = validateGamePak(buffer);
+      if (!validation.valid) {
+        result.skipped++;
+        continue;
+      }
+
+      // Generate new ID to avoid conflicts
+      const newId = randomUUID();
+      const newBackup: GamePakBackup = {
+        ...backup,
+        id: newId,
+      };
+
+      // Write backup file
+      await writeFileAtomic(path.join(getBackupsDir(cartId), `${newId}.img`), buffer);
+
+      // Add to metadata
+      existingMetadata.backups.push(newBackup);
+      existingHashes.add(backup.md5Hash);
+      result.added++;
     }
-
-    // Validate the buffer
-    const validation = validateGamePak(buffer);
-    if (!validation.valid) {
-      result.skipped++;
-      continue;
-    }
-
-    // Generate new ID to avoid conflicts
-    const newId = randomUUID();
-    const newBackup: GamePakBackup = {
-      ...backup,
-      id: newId,
-    };
-
-    // Ensure backups directory exists
-    const backupsDir = getBackupsDir(cartId);
-    await mkdir(backupsDir, { recursive: true });
-
-    // Write backup file
-    const backupPath = path.join(backupsDir, `${newId}.img`);
-    await writeFile(backupPath, buffer);
-
-    // Add to metadata
-    existingMetadata.backups.push(newBackup);
-    existingHashes.add(backup.md5Hash);
-    result.added++;
-  }
-
-  // Save updated metadata
-  await saveBackupsMetadata(cartId, existingMetadata);
+  });
 
   return result;
 }
