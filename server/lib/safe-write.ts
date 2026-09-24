@@ -11,7 +11,7 @@
  * - Tracked: whenWritesIdle resolves once no write is in progress (for shutdown).
  */
 
-import { copyFile, open, readdir, readFile, rename, unlink } from 'fs/promises';
+import { copyFile, open, readdir, readFile, rename, stat, unlink } from 'fs/promises';
 import path from 'path';
 import { copyFileWithProgress, type ProgressCallback } from './file-transfer.js';
 
@@ -63,18 +63,16 @@ export function whenWritesIdle(timeoutMs: number): Promise<boolean> {
 /**
  * fsync a file or directory. On FAT a rename only changes the directory, which
  * the kernel otherwise writes back up to ~30s later: a card removed in that
- * window keeps the old name. Windows can't open directories for syncing (it
- * writes removable-media metadata through immediately), so that case is skipped.
+ * window keeps the old name.
+ *
+ * Windows: directories can't be flushed (fsync fails with EPERM; Windows writes
+ * removable-media metadata through itself), so they're skipped. Files need write
+ * access to be flushed (FlushFileBuffers), so they're opened read-write.
  */
 export async function syncToDisk(target: string): Promise<void> {
-  let handle;
-  try {
-    handle = await open(target, 'r');
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (process.platform === 'win32' && (code === 'EISDIR' || code === 'EPERM' || code === 'EACCES')) return;
-    throw error;
-  }
+  const isDirectory = (await stat(target)).isDirectory();
+  if (isDirectory && process.platform === 'win32') return;
+  const handle = await open(target, isDirectory ? 'r' : 'r+');
   try {
     await handle.sync();
   } finally {
