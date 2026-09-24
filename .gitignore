@@ -45,3 +45,7 @@ tests/*/output/
 # Electron desktop build output
 dist-electron/
 release/
+
+# Python bytecode
+__pycache__/
+*.pyc
