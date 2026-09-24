@@ -4,12 +4,23 @@ All notable changes to A3D Manager Local. Each release's section is used as its 
 
 ## [0.2.1] - 2026-09-24
 
-Fixes saving on Windows.
+Fixes saving on Windows, and adds a portable Windows version.
 
 ### Downloads
 
 - **Linux:** `A3D-Manager-Local-0.2.1-x86_64.AppImage`
-- **Windows:** `A3D-Manager-Local-0.2.1-x64.exe` (not code-signed; SmartScreen warns on first run)
+- **Windows installer:** `A3D-Manager-Local-0.2.1-x64-installer.exe`
+- **Windows portable:** `A3D-Manager-Local-0.2.1-x64-portable.exe`, runs without installing
+
+The Windows files aren't code-signed; SmartScreen warns on first run. The installed and portable versions share the same data.
+
+### Added
+
+- **Portable Windows version** that runs without installing.
+
+### Changed
+
+- The Windows installer is now named `…-installer.exe`.
 
 ### Fixed
 
