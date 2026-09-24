@@ -2,6 +2,20 @@
 
 All notable changes to A3D Manager Local. Each release's section is used as its GitHub release notes.
 
+## [0.2.1] - 2026-09-24
+
+Fixes saving on Windows.
+
+### Downloads
+
+- **Linux:** `A3D-Manager-Local-0.2.1-x86_64.AppImage`
+- **Windows:** `A3D-Manager-Local-0.2.1-x64.exe` (not code-signed; SmartScreen warns on first run)
+
+### Fixed
+
+- **Windows: changes failed with "operation not permitted, fsync".** Marking cartridges as owned, custom names, settings, labels and Controller Pak saves all failed to save on Windows in 0.2.0. Windows can't force a folder to disk, which the new safe saving tried to do after each write.
+- **Windows: copying the firmware update to the SD card** failed at its final step, for the same reason.
+
 ## [0.2.0] - 2026-09-24
 
 Screenshots and Memories on the SD card, nearly every retail cartridge recognized, and a round of reliability fixes so interrupted transfers, quitting and failed saves can't lose data. A3D Manager Local is now a desktop app only.

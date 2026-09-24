@@ -5,7 +5,7 @@
  * and JSON stores that never treat an unreadable file as empty.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { test, assert, assertEqual, TestSuite } from '../utils.js';
@@ -13,6 +13,7 @@ import {
   CorruptFileError,
   copyFileAtomic,
   removeLeftoverPartials,
+  syncToDisk,
   updateJsonFile,
   whenWritesIdle,
   withFileLock,
@@ -171,6 +172,38 @@ export const safeWriteSuite: TestSuite = {
         await write;
         assert(idle, 'idle before timeout');
         assert(await whenWritesIdle(0), 'idle immediately with nothing running');
+      })),
+
+    test('syncToDisk flushes a file and a folder', () =>
+      inTempDir(async (dir) => {
+        const file = path.join(dir, 'owned-carts.json');
+        writeFileSync(file, '{}');
+        await syncToDisk(file);
+        await syncToDisk(dir);
+      })),
+
+    test('syncToDisk skips folders on Windows, where fsync on a directory fails', () =>
+      inTempDir(async (dir) => {
+        const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        try {
+          // Resolves without opening the folder (Windows would fail with EPERM)
+          await syncToDisk(dir);
+        } finally {
+          Object.defineProperty(process, 'platform', platform);
+        }
+      })),
+
+    test('syncToDisk opens files read-write, as Windows needs to flush them', () =>
+      inTempDir(async (dir) => {
+        const file = path.join(dir, 'read-only.img');
+        writeFileSync(file, 'x');
+        chmodSync(file, 0o444);
+        let failed = false;
+        // A file the app can't write to can't be flushed on Windows either: it must fail, not silently skip
+        await syncToDisk(file).catch(() => (failed = true));
+        chmodSync(file, 0o644);
+        assert(failed || process.getuid?.() === 0, 'read-only file is opened for writing');
       })),
   ],
 };
