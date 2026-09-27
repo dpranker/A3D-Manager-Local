@@ -123,10 +123,10 @@ Tests for cartridge ownership tracking, settings parsing, and game pak operation
 
 ---
 
-## SD Card Configuration Tests (4 tests)
+## SD Card Configuration Tests
 
 Tests for SD card detection and the path the app searches for cards (set by the desktop SD card picker).
 
 | Category | Tests | Description |
 |----------|-------|-------------|
-| Volumes Path | 4 | SD_VOLUMES_PATH env var, default /Volumes, Linux/macOS paths |
+| Search locations | 4 | Chosen folder (SD_VOLUMES_PATH) first, then Linux /run/media and /media, macOS /Volumes; finds a card once |

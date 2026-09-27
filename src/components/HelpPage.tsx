@@ -39,8 +39,8 @@ export function HelpPage() {
           <ul>
             <li>Insert your Analogue 3D SD card; the header shows "SD Card Connected" once it's detected</li>
             <li>
-              In the desktop app, click "Choose SD Card…" in the header to pick the card (or the folder it's
-              mounted under). The web version finds it using the <code>SD_VOLUMES_PATH</code> setting
+              If it isn't found, click "Choose SD Card…" in the header to pick the card (or the folder it's
+              mounted under)
             </li>
           </ul>
 

@@ -2,6 +2,13 @@
 
 All notable changes to A3D Manager Local. Each release's section is used as its GitHub release notes.
 
+## [Unreleased]
+
+### Fixed
+
+- **Linux: SD card not detected when inserted after the app started** (on Fedora, Arch, SteamOS and others the mount folder only appears with the first card after boot). Detection now checks `/run/media` and `/media` each time, including mounts outside a user folder (older SteamOS). A chosen folder no longer turns this off: if the card isn't there, the usual locations are still searched.
+- **Windows: saves could fail with "EPERM: operation not permitted, rename"** when antivirus or Explorer briefly held a file the app had just written. Renames are retried for a few seconds, and deleting cartridge folders retries the same way.
+
 ## [0.2.1] - 2026-09-24
 
 Fixes saving on Windows, and adds a portable Windows version.

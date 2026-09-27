@@ -1,14 +1,14 @@
 /**
- * Where the server looks for SD cards. Upstream reads SD_VOLUMES_PATH on every
+ * Where the server looks for SD cards. It reads SD_VOLUMES_PATH on every
  * detection call, so the desktop app just keeps that env var in sync with the
  * folder the user picked (persisted in userData/desktop-settings.json).
  *
- * Priority: picked folder > SD_VOLUMES_PATH from the environment >
- * the platform's removable-media mount directory.
+ * Priority: picked folder > SD_VOLUMES_PATH from the environment. The server
+ * also searches the platform's removable-media locations (drive letters,
+ * /run/media/<user>, ...) itself on every call, since those appear and disappear.
  */
 import { existsSync } from 'fs';
 import { readFile, readdir, writeFile } from 'fs/promises';
-import os from 'os';
 import path from 'path';
 
 interface DesktopSettings {
@@ -22,12 +22,11 @@ export class SDCardLocation {
     this.settingsFile = path.join(userDataDir, 'desktop-settings.json');
   }
 
-  /** Apply the saved location (else SD_VOLUMES_PATH from the environment, else the OS default) to SD_VOLUMES_PATH */
+  /** Apply the saved location (else keep SD_VOLUMES_PATH from the environment) to SD_VOLUMES_PATH */
   async init(): Promise<void> {
     const saved = (await this.readSettings()).sdCardPath;
-    const location = saved ?? process.env.SD_VOLUMES_PATH ?? defaultMountDir();
-    if (location) {
-      process.env.SD_VOLUMES_PATH = location;
+    if (saved) {
+      process.env.SD_VOLUMES_PATH = saved;
     }
   }
 
@@ -71,15 +70,4 @@ async function containsAnalogueCard(dir: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function defaultMountDir(): string | undefined {
-  const user = os.userInfo().username;
-  const candidates =
-    process.platform === 'darwin'
-      ? ['/Volumes']
-      : process.platform === 'linux'
-        ? [`/run/media/${user}`, `/media/${user}`]
-        : [];
-  return candidates.find((dir) => existsSync(dir));
 }
