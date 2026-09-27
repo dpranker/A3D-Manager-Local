@@ -22,31 +22,21 @@ export interface SDCardInfo {
   labelsDbPath: string;
 }
 
-export interface SearchRoot {
-  path: string;
-  /** Also look one level down (a folder cards are mounted under), not just at path itself */
-  scanChildren: boolean;
-}
-
 /**
  * Where to look for cards: the folder chosen in the app (SD_VOLUMES_PATH), then the
  * platform's removable-media locations. Evaluated on every detection, since the
- * Linux mount folders are created on the first mount after boot (/run is tmpfs) and
- * Windows drive letters come and go.
+ * Linux mount folders are created on the first mount after boot (/run is tmpfs).
+ * Windows has no defaults: the card is chosen in the app.
  */
-export function getSearchRoots(): SearchRoot[] {
+export function getSearchRoots(): string[] {
   const chosen = process.env.SD_VOLUMES_PATH;
-  const roots = [...(chosen ? [{ path: chosen, scanChildren: true }] : []), ...defaultSearchRoots()];
-  return roots.filter((root, i) => roots.findIndex((r) => r.path === root.path) === i);
+  return [...new Set([...(chosen ? [chosen] : []), ...defaultSearchRoots()])];
 }
 
-export function defaultSearchRoots(platform: NodeJS.Platform = process.platform): SearchRoot[] {
+export function defaultSearchRoots(platform: NodeJS.Platform = process.platform): string[] {
   switch (platform) {
     case 'darwin':
-      return [{ path: '/Volumes', scanChildren: true }];
-    case 'win32':
-      // Each drive letter is a possible card (A: and B: are floppy letters; probing them can stall)
-      return [...'CDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter) => ({ path: `${letter}:\\`, scanChildren: false }));
+      return ['/Volumes'];
     case 'linux': {
       const user = currentUser();
       return [
@@ -57,7 +47,7 @@ export function defaultSearchRoots(platform: NodeJS.Platform = process.platform)
         '/media',
         // ChromeOS Linux (Crostini), once the card is shared with Linux
         '/mnt/chromeos/removable',
-      ].map((dir) => ({ path: dir, scanChildren: true }));
+      ];
     }
     default:
       return [];
@@ -99,10 +89,9 @@ async function isAnalogue3DRoot(volumePath: string): Promise<SDCardInfo | null> 
 }
 
 /** Cards at root itself, or one level below it (e.g. /Volumes/ANALOGUE 3D under /Volumes) */
-async function findCardsIn({ path: root, scanChildren }: SearchRoot): Promise<SDCardInfo[]> {
+async function findCardsIn(root: string): Promise<SDCardInfo[]> {
   const directCard = await isAnalogue3DRoot(root);
   if (directCard) return [directCard];
-  if (!scanChildren) return [];
 
   let volumes: string[];
   try {
@@ -118,10 +107,10 @@ let detecting: Promise<SDCardInfo[]> | null = null;
 
 /**
  * Detect Analogue 3D SD cards in every location from getSearchRoots(). Each can be:
- * - The SD card itself (e.g., /Volumes/ANALOGUE 3D or E:\)
+ * - The SD card itself (e.g., /Volumes/ANALOGUE 3D or E:\ as chosen on Windows)
  * - A parent directory containing SD cards (e.g., /Volumes)
- * Drives are probed in parallel, so one slow drive doesn't hold up the rest. Calls made
- * while a detection runs share it: a disconnected network drive can take many seconds
+ * Locations are probed in parallel, so one slow mount doesn't hold up the rest. Calls
+ * made while a detection runs share it: a stale network mount can take many seconds
  * to fail, and the window polls every few seconds.
  */
 export function detectSDCards(): Promise<SDCardInfo[]> {

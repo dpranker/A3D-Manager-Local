@@ -51,8 +51,7 @@ export const sdCardSuite: TestSuite = {
     test('getSearchRoots puts the chosen folder first, then the platform defaults', () =>
       withVolumesPath('/mnt/cards', () => {
         const roots = getSearchRoots();
-        assertEqual(roots[0].path, '/mnt/cards');
-        assert(roots[0].scanChildren, 'chosen folder may be a parent of cards');
+        assertEqual(roots[0], '/mnt/cards');
         assertEqual(roots.length, 1 + defaultSearchRoots().length);
       })),
 
@@ -62,18 +61,15 @@ export const sdCardSuite: TestSuite = {
       })),
 
     test('defaultSearchRoots covers each platform\'s removable-media locations', () => {
-      assertEqual(defaultSearchRoots('darwin').map((r) => r.path).join(), '/Volumes');
+      assertEqual(defaultSearchRoots('darwin').join(), '/Volumes');
 
-      const linux = defaultSearchRoots('linux').map((r) => r.path);
+      const linux = defaultSearchRoots('linux');
       const user = os.userInfo().username;
       for (const dir of [`/run/media/${user}`, `/media/${user}`, '/run/media', '/media']) {
         assert(linux.includes(dir), `linux searches ${dir}`);
       }
 
-      const windows = defaultSearchRoots('win32');
-      assert(windows.some((r) => r.path === 'E:\\'), 'windows searches drive roots');
-      assert(!windows.some((r) => r.path.startsWith('A:')), 'windows skips floppy letters');
-      assert(windows.every((r) => !r.scanChildren), 'windows only checks each drive itself');
+      assertEqual(defaultSearchRoots('win32').length, 0, 'windows only uses the chosen card');
     }),
 
     test('detectSDCards finds a card inside the chosen folder, once', async () => {

@@ -129,4 +129,4 @@ Tests for SD card detection and the path the app searches for cards (set by the 
 
 | Category | Tests | Description |
 |----------|-------|-------------|
-| Search locations | 4 | Chosen folder (SD_VOLUMES_PATH) first, then Windows drive letters, Linux /run/media and /media, macOS /Volumes; finds a card once |
+| Search locations | 4 | Chosen folder (SD_VOLUMES_PATH) first, then Linux /run/media and /media, macOS /Volumes; finds a card once |
