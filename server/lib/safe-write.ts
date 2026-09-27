@@ -80,6 +80,26 @@ export async function syncToDisk(target: string): Promise<void> {
   }
 }
 
+// Windows: antivirus, the search indexer and Explorer's thumbnailer open files that were
+// just written or are about to be replaced, and a rename fails with EPERM/EACCES/EBUSY
+// while they hold them (usually for milliseconds). Retry for a few seconds before failing.
+const LOCKED_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_RETRY_MS = 5_000;
+
+/** rename, retried while Windows reports the file as locked by another process */
+export async function renameWithRetry(from: string, to: string): Promise<void> {
+  const deadline = Date.now() + RENAME_RETRY_MS;
+  for (let delay = 10; ; delay = Math.min(delay * 2, 500)) {
+    try {
+      return await rename(from, to);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (process.platform !== 'win32' || !LOCKED_CODES.has(code) || Date.now() >= deadline) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+
 async function exists(target: string): Promise<boolean> {
   try {
     await (await open(target, 'r')).close();
@@ -95,7 +115,7 @@ async function commit(partialPath: string, target: string, options: SafeWriteOpt
     // Copy, not rename: the target stays in place until the new file replaces it
     await copyFile(target, `${target}${BACKUP_SUFFIX}`);
   }
-  await rename(partialPath, target);
+  await renameWithRetry(partialPath, target);
   await syncToDisk(path.dirname(target));
 }
 
@@ -227,7 +247,7 @@ export async function readJsonStrict<T>(
     return parsed;
   } catch (cause) {
     const movedTo = `${target}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-    await rename(target, movedTo);
+    await renameWithRetry(target, movedTo);
     throw new CorruptFileError(target, movedTo, cause);
   }
 }

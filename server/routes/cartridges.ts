@@ -143,7 +143,8 @@ router.post('/owned/cleanup-orphans/apply', async (req, res) => {
     for (const id of safeIds) {
       const folder = byId.get(id)!;
       try {
-        await rm(path.join(gamesDir, folder), { recursive: true });
+        // maxRetries: Windows fails with EBUSY/EPERM while Explorer or antivirus has a file open
+        await rm(path.join(gamesDir, folder), { recursive: true, maxRetries: 5 });
       } catch (error) {
         failure = `${folder}: ${error instanceof Error ? error.message : String(error)}`;
         break;

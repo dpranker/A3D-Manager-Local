@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { test, assert, assertEqual, TestSuite } from '../utils.js';
-import { getVolumesPath } from '../../server/lib/sd-card.js';
+import { defaultSearchRoots, detectSDCards, getSearchRoots } from '../../server/lib/sd-card.js';
 import { ensureSdGameFolder } from '../../server/lib/cartridge-settings.js';
 import { sdCardPathGuard } from '../../server/lib/request-guards.js';
 
@@ -18,6 +18,19 @@ function makeCard(): string {
   mkdirSync(path.join(card, 'Library', 'N64', 'Games'), { recursive: true });
   writeFileSync(path.join(card, 'Library', 'N64', 'library.db'), '');
   return card;
+}
+
+/** Run fn with SD_VOLUMES_PATH set to value (unset if undefined), then restore it */
+async function withVolumesPath(value: string | undefined, fn: () => void | Promise<void>): Promise<void> {
+  const original = process.env.SD_VOLUMES_PATH;
+  if (value === undefined) delete process.env.SD_VOLUMES_PATH;
+  else process.env.SD_VOLUMES_PATH = value;
+  try {
+    await fn();
+  } finally {
+    if (original === undefined) delete process.env.SD_VOLUMES_PATH;
+    else process.env.SD_VOLUMES_PATH = original;
+  }
 }
 
 /** Run the guard with a fake request; returns the status it sent, or 'next' */
@@ -32,68 +45,53 @@ export const sdCardSuite: TestSuite = {
   name: 'SD Card Configuration',
   tests: [
     // =========================================================================
-    // Volumes Path Configuration
+    // Where cards are searched for
     // =========================================================================
 
-    test('getVolumesPath returns default /Volumes/ANALOGUE 3D when env var not set', () => {
-      const original = process.env.SD_VOLUMES_PATH;
-      delete process.env.SD_VOLUMES_PATH;
+    test('getSearchRoots puts the chosen folder first, then the platform defaults', () =>
+      withVolumesPath('/mnt/cards', () => {
+        const roots = getSearchRoots();
+        assertEqual(roots[0].path, '/mnt/cards');
+        assert(roots[0].scanChildren, 'chosen folder may be a parent of cards');
+        assertEqual(roots.length, 1 + defaultSearchRoots().length);
+      })),
 
-      try {
-        assertEqual(getVolumesPath(), '/Volumes/ANALOGUE 3D');
-      } finally {
-        // Restore original value
-        if (original !== undefined) {
-          process.env.SD_VOLUMES_PATH = original;
-        }
+    test('getSearchRoots without a chosen folder is the platform defaults, without duplicates', () =>
+      withVolumesPath(undefined, () => {
+        assertEqual(getSearchRoots().length, defaultSearchRoots().length);
+      })),
+
+    test('defaultSearchRoots covers each platform\'s removable-media locations', () => {
+      assertEqual(defaultSearchRoots('darwin').map((r) => r.path).join(), '/Volumes');
+
+      const linux = defaultSearchRoots('linux').map((r) => r.path);
+      const user = os.userInfo().username;
+      for (const dir of [`/run/media/${user}`, `/media/${user}`, '/run/media', '/media']) {
+        assert(linux.includes(dir), `linux searches ${dir}`);
       }
+
+      const windows = defaultSearchRoots('win32');
+      assert(windows.some((r) => r.path === 'E:\\'), 'windows searches drive roots');
+      assert(!windows.some((r) => r.path.startsWith('A:')), 'windows skips floppy letters');
+      assert(windows.every((r) => !r.scanChildren), 'windows only checks each drive itself');
     }),
 
-    test('getVolumesPath returns custom path from SD_VOLUMES_PATH env var', () => {
-      const original = process.env.SD_VOLUMES_PATH;
-      process.env.SD_VOLUMES_PATH = '/media';
-
+    test('detectSDCards finds a card inside the chosen folder, once', async () => {
+      const parent = mkdtempSync(path.join(os.tmpdir(), 'a3d-volumes-'));
+      const card = path.join(parent, 'ANALOGUE 3D');
+      mkdirSync(path.join(card, 'Library', 'N64'), { recursive: true });
+      writeFileSync(path.join(card, 'Library', 'N64', 'library.db'), '');
       try {
-        assertEqual(getVolumesPath(), '/media');
+        await withVolumesPath(parent, async () => {
+          const found = (await detectSDCards()).filter((c) => c.path === card);
+          assertEqual(found.length, 1);
+          assertEqual(found[0].name, 'ANALOGUE 3D');
+        });
+        await withVolumesPath(card, async () => {
+          assertEqual((await detectSDCards())[0].path, card);
+        });
       } finally {
-        // Restore original value
-        if (original !== undefined) {
-          process.env.SD_VOLUMES_PATH = original;
-        } else {
-          delete process.env.SD_VOLUMES_PATH;
-        }
-      }
-    }),
-
-    test('getVolumesPath supports specific SD card path', () => {
-      const original = process.env.SD_VOLUMES_PATH;
-      process.env.SD_VOLUMES_PATH = '/Volumes/ANALOGUE3D';
-
-      try {
-        assertEqual(getVolumesPath(), '/Volumes/ANALOGUE3D');
-      } finally {
-        // Restore original value
-        if (original !== undefined) {
-          process.env.SD_VOLUMES_PATH = original;
-        } else {
-          delete process.env.SD_VOLUMES_PATH;
-        }
-      }
-    }),
-
-    test('getVolumesPath supports Linux media paths', () => {
-      const original = process.env.SD_VOLUMES_PATH;
-      process.env.SD_VOLUMES_PATH = '/run/media/user';
-
-      try {
-        assertEqual(getVolumesPath(), '/run/media/user');
-      } finally {
-        // Restore original value
-        if (original !== undefined) {
-          process.env.SD_VOLUMES_PATH = original;
-        } else {
-          delete process.env.SD_VOLUMES_PATH;
-        }
+        rmSync(parent, { recursive: true, force: true });
       }
     }),
 

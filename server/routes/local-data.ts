@@ -187,7 +187,7 @@ router.delete('/game-data', async (_req, res) => {
       const folderStat = await stat(folderPath);
 
       if (folderStat.isDirectory()) {
-        await rm(folderPath, { recursive: true, force: true });
+        await rm(folderPath, { recursive: true, force: true, maxRetries: 5 });
         deletedCount++;
       }
     }
@@ -241,7 +241,7 @@ router.delete('/all', async (_req, res) => {
 
     // Delete game data
     if (existsSync(GAMES_DIR)) {
-      await rm(GAMES_DIR, { recursive: true, force: true });
+      await rm(GAMES_DIR, { recursive: true, force: true, maxRetries: 5 });
       results.gameData = true;
     }
 

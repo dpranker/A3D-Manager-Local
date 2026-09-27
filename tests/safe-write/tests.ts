@@ -13,6 +13,7 @@ import {
   CorruptFileError,
   copyFileAtomic,
   removeLeftoverPartials,
+  renameWithRetry,
   syncToDisk,
   updateJsonFile,
   whenWritesIdle,
@@ -26,6 +27,17 @@ async function inTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
     await fn(dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Run fn with process.platform reporting win32 */
+async function asWindows<T>(fn: () => Promise<T>): Promise<T> {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  Object.defineProperty(process, 'platform', { value: 'win32' });
+  try {
+    return await fn();
+  } finally {
+    Object.defineProperty(process, 'platform', platform);
   }
 }
 
@@ -204,6 +216,31 @@ export const safeWriteSuite: TestSuite = {
         await syncToDisk(file).catch(() => (failed = true));
         chmodSync(file, 0o644);
         assert(failed || process.getuid?.() === 0, 'read-only file is opened for writing');
+      })),
+
+    test('renameWithRetry waits out a file another program holds on Windows', () =>
+      inTempDir(async (dir) => {
+        // A folder we can't write to stands in for a locked file (EACCES), released 100ms later
+        const locked = path.join(dir, 'locked');
+        mkdirSync(locked);
+        writeFileSync(path.join(locked, 'settings.json.partial'), '{}');
+        chmodSync(locked, 0o555);
+        const unlock = setTimeout(() => chmodSync(locked, 0o755), 100);
+        await asWindows(() => renameWithRetry(path.join(locked, 'settings.json.partial'), path.join(locked, 'settings.json')));
+        clearTimeout(unlock);
+        chmodSync(locked, 0o755);
+        assertEqual(read(path.join(locked, 'settings.json')), '{}');
+      })),
+
+    test('renameWithRetry fails right away on errors other than a lock', () =>
+      inTempDir(async (dir) => {
+        const started = Date.now();
+        let code = '';
+        await asWindows(() => renameWithRetry(path.join(dir, 'missing'), path.join(dir, 'target'))).catch(
+          (error: NodeJS.ErrnoException) => (code = error.code ?? ''),
+        );
+        assertEqual(code, 'ENOENT');
+        assert(Date.now() - started < 1000, 'not retried');
       })),
   ],
 };

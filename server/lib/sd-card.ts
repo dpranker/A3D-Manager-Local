@@ -1,5 +1,6 @@
 import { readdir, stat, access, constants } from 'fs/promises';
 import { statSync } from 'fs';
+import os from 'os';
 import path from 'path';
 import { copyFileAtomic, withFileLock } from './safe-write.js';
 import {
@@ -21,12 +22,55 @@ export interface SDCardInfo {
   labelsDbPath: string;
 }
 
+export interface SearchRoot {
+  path: string;
+  /** Also look one level down (a folder cards are mounted under), not just at path itself */
+  scanChildren: boolean;
+}
+
 /**
- * Get the path where the Analogue 3D SD card is mounted
- * Defaults to /Volumes/ANALOGUE 3D (standard macOS mount), can be overridden via SD_VOLUMES_PATH env var
+ * Where to look for cards: the folder chosen in the app (SD_VOLUMES_PATH), then the
+ * platform's removable-media locations. Evaluated on every detection, since the
+ * Linux mount folders are created on the first mount after boot (/run is tmpfs) and
+ * Windows drive letters come and go.
  */
-export function getVolumesPath(): string {
-  return process.env.SD_VOLUMES_PATH || '/Volumes/ANALOGUE 3D';
+export function getSearchRoots(): SearchRoot[] {
+  const chosen = process.env.SD_VOLUMES_PATH;
+  const roots = [...(chosen ? [{ path: chosen, scanChildren: true }] : []), ...defaultSearchRoots()];
+  return roots.filter((root, i) => roots.findIndex((r) => r.path === root.path) === i);
+}
+
+export function defaultSearchRoots(platform: NodeJS.Platform = process.platform): SearchRoot[] {
+  switch (platform) {
+    case 'darwin':
+      return [{ path: '/Volumes', scanChildren: true }];
+    case 'win32':
+      // Each drive letter is a possible card (A: and B: are floppy letters; probing them can stall)
+      return [...'CDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter) => ({ path: `${letter}:\\`, scanChildren: false }));
+    case 'linux': {
+      const user = currentUser();
+      return [
+        // udisks2: Fedora, Arch, openSUSE, SteamOS (/run/media/<user>); Debian, Ubuntu, Mint, Raspberry Pi OS (/media/<user>)
+        ...(user ? [`/run/media/${user}`, `/media/${user}`] : []),
+        // Mounts not under a user folder: older SteamOS (/run/media/mmcblk0p1), usbmount and manual mounts (/media/<label>)
+        '/run/media',
+        '/media',
+        // ChromeOS Linux (Crostini), once the card is shared with Linux
+        '/mnt/chromeos/removable',
+      ].map((dir) => ({ path: dir, scanChildren: true }));
+    }
+    default:
+      return [];
+  }
+}
+
+function currentUser(): string | undefined {
+  try {
+    return os.userInfo().username;
+  } catch {
+    // No passwd entry for the uid (some containers and sandboxes)
+    return process.env.USER || undefined;
+  }
 }
 
 /**
@@ -41,7 +85,7 @@ async function isAnalogue3DRoot(volumePath: string): Promise<SDCardInfo | null> 
     const volumeStat = await stat(volumePath);
     if (volumeStat.isDirectory()) {
       return {
-        name: path.basename(volumePath),
+        name: path.basename(volumePath) || volumePath,
         path: volumePath,
         gamesPath: path.join(libraryPath, 'Games'),
         libraryDbPath,
@@ -54,39 +98,41 @@ async function isAnalogue3DRoot(volumePath: string): Promise<SDCardInfo | null> 
   return null;
 }
 
-/**
- * Detect Analogue 3D SD cards by scanning volumes path for the expected structure
- * Supports both:
- * - Direct SD card path (e.g., /Volumes/ANALOGUE 3D)
- * - Parent directory containing SD cards (e.g., /Volumes)
- */
-export async function detectSDCards(): Promise<SDCardInfo[]> {
-  const volumesPath = getVolumesPath();
-  const sdCards: SDCardInfo[] = [];
+/** Cards at root itself, or one level below it (e.g. /Volumes/ANALOGUE 3D under /Volumes) */
+async function findCardsIn({ path: root, scanChildren }: SearchRoot): Promise<SDCardInfo[]> {
+  const directCard = await isAnalogue3DRoot(root);
+  if (directCard) return [directCard];
+  if (!scanChildren) return [];
 
+  let volumes: string[];
   try {
-    // First, check if volumesPath itself is an Analogue 3D SD card
-    const directCard = await isAnalogue3DRoot(volumesPath);
-    if (directCard) {
-      sdCards.push(directCard);
-      return sdCards;
-    }
-
-    // Otherwise, scan volumesPath as a parent directory containing volumes
-    const volumes = await readdir(volumesPath);
-
-    for (const volume of volumes) {
-      const volumePath = path.join(volumesPath, volume);
-      const card = await isAnalogue3DRoot(volumePath);
-      if (card) {
-        sdCards.push(card);
-      }
-    }
-  } catch (error) {
-    console.error('Error scanning volumes:', error);
+    volumes = await readdir(root);
+  } catch {
+    return []; // Missing, unmounted or not readable (e.g. a user folder that doesn't exist yet)
   }
+  const cards = await Promise.all(volumes.map((volume) => isAnalogue3DRoot(path.join(root, volume))));
+  return cards.filter((card): card is SDCardInfo => card !== null);
+}
 
-  return sdCards;
+let detecting: Promise<SDCardInfo[]> | null = null;
+
+/**
+ * Detect Analogue 3D SD cards in every location from getSearchRoots(). Each can be:
+ * - The SD card itself (e.g., /Volumes/ANALOGUE 3D or E:\)
+ * - A parent directory containing SD cards (e.g., /Volumes)
+ * Drives are probed in parallel, so one slow drive doesn't hold up the rest. Calls made
+ * while a detection runs share it: a disconnected network drive can take many seconds
+ * to fail, and the window polls every few seconds.
+ */
+export function detectSDCards(): Promise<SDCardInfo[]> {
+  detecting ??= (async () => {
+    const found = (await Promise.all(getSearchRoots().map(findCardsIn))).flat();
+    const seen = new Set<string>();
+    return found.filter((card) => !seen.has(card.path) && seen.add(card.path));
+  })().finally(() => {
+    detecting = null;
+  });
+  return detecting;
 }
 
 /**

@@ -14,13 +14,13 @@
  */
 import { createHash } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
-import { mkdir, readdir, rename, stat, unlink } from 'fs/promises';
+import { mkdir, readdir, stat, unlink } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import type { ReadableStream as WebReadableStream } from 'stream/web';
 import { copyFileWithProgress, type ProgressCallback } from './file-transfer.js';
-import { syncToDisk } from './safe-write.js';
+import { renameWithRetry, syncToDisk } from './safe-write.js';
 
 const SITE_ORIGIN = 'https://www.analogue.co';
 export const FIRMWARE_API_BASE = `${SITE_ORIGIN}/support/3d/firmware`;
@@ -389,7 +389,7 @@ export async function downloadFirmware(release: FirmwareRelease, onProgress: Pro
     if (downloadedMd5 !== release.md5) {
       throw new Error(`Firmware download is corrupt: MD5 ${downloadedMd5} doesn't match Analogue's published ${release.md5}`);
     }
-    await rename(partialPath, localPath);
+    await renameWithRetry(partialPath, localPath);
   } catch (error) {
     await unlink(partialPath).catch(() => {});
     throw error;
@@ -430,7 +430,7 @@ export async function installFirmwareToSD(
     if (written !== expectedSize) {
       throw new Error(`SD card copy incomplete: wrote ${written} of ${expectedSize} bytes`);
     }
-    await rename(partialPath, destPath);
+    await renameWithRetry(partialPath, destPath);
   } catch (error) {
     await unlink(partialPath).catch(() => {});
     throw error;
