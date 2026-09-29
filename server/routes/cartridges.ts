@@ -78,7 +78,14 @@ const bundleUpload = multer({
 // Ownership Routes
 // =============================================================================
 
-async function findOrphanedUnknownFolders(sdCardPath: string): Promise<Array<{ cartId: string; folderName: string }>> {
+interface OrphanScan {
+  /** Unknown folders on the card that the console's library.db no longer lists */
+  candidates: Array<{ cartId: string; folderName: string }>;
+  /** Carts in the owned list (found on a card) that are no longer on this card at all */
+  missing: Array<{ cartId: string; name: string }>;
+}
+
+async function findOrphanedUnknownFolders(sdCardPath: string): Promise<OrphanScan> {
   const activeIds = await readConsoleLibraryIds(sdCardPath);
   const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
   const folders = await readdir(gamesDir, { withFileTypes: true });
@@ -86,8 +93,9 @@ async function findOrphanedUnknownFolders(sdCardPath: string): Promise<Array<{ c
     readFile(path.join(process.cwd(), 'data', 'cart-names.json'), 'utf8'),
     readFile(path.join(process.cwd(), '.local', 'user-carts.json'), 'utf8').catch(() => '[]'),
   ]);
-  const knownIds = new Set((JSON.parse(database) as Array<{ id: string }>).map(({ id }) => id.toLowerCase()));
-  for (const entry of JSON.parse(custom) as Array<{ id: string }>) knownIds.add(entry.id.toLowerCase());
+  const names = new Map<string, string>();
+  for (const { id, name } of JSON.parse(database) as Array<{ id: string; name: string }>) names.set(id.toLowerCase(), name);
+  for (const { id, name } of JSON.parse(custom) as Array<{ id: string; name: string }>) names.set(id.toLowerCase(), name);
 
   const candidates: Array<{ cartId: string; folderName: string }> = [];
   for (const folder of folders) {
@@ -95,7 +103,7 @@ async function findOrphanedUnknownFolders(sdCardPath: string): Promise<Array<{ c
     const match = folder.name.match(/([0-9a-fA-F]{8})$/);
     if (!match) continue;
     const cartId = match[1].toLowerCase();
-    if (activeIds.has(cartId) || knownIds.has(cartId)) continue;
+    if (activeIds.has(cartId) || names.has(cartId)) continue;
     const libraryPath = path.join(gamesDir, folder.name, 'library.json');
     if (existsSync(libraryPath)) {
       try {
@@ -107,7 +115,21 @@ async function findOrphanedUnknownFolders(sdCardPath: string): Promise<Array<{ c
     }
     candidates.push({ cartId, folderName: folder.name });
   }
-  return candidates;
+
+  // Only carts the app found on a card: ones added by hand may never have been on it
+  const folderIds = new Set<string>();
+  for (const folder of folders) {
+    const match = folder.isDirectory() && folder.name.match(/([0-9a-fA-F]{8})$/);
+    if (match) folderIds.add(match[1].toLowerCase());
+  }
+  const missing = (await getOwnedCartridges())
+    .filter(({ cartId, source }) => {
+      const id = cartId.toLowerCase();
+      return source === 'sd-card' && !folderIds.has(id) && !activeIds.has(id);
+    })
+    .map(({ cartId }) => ({ cartId: cartId.toLowerCase(), name: names.get(cartId.toLowerCase()) ?? 'Unknown Cartridge' }));
+
+  return { candidates, missing };
 }
 
 /** Compare unknown SD card folders with the active library.db. */
@@ -117,8 +139,7 @@ router.post('/owned/cleanup-orphans/scan', async (req, res) => {
     return res.status(400).json({ error: 'SD card path is required' });
   }
   try {
-    const candidates = await findOrphanedUnknownFolders(sdCardPath);
-    res.json({ candidates });
+    res.json(await findOrphanedUnknownFolders(sdCardPath));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'Could not compare the SD card library' });
   }
@@ -126,14 +147,19 @@ router.post('/owned/cleanup-orphans/scan', async (req, res) => {
 
 /** Remove selected candidates after rechecking the current SD card library. */
 router.post('/owned/cleanup-orphans/apply', async (req, res) => {
-  const { sdCardPath, cartIds } = req.body ?? {};
-  if (typeof sdCardPath !== 'string' || !sdCardPath || !Array.isArray(cartIds) ||
-      cartIds.some((id: unknown) => typeof id !== 'string' || !/^[0-9a-f]{8}$/i.test(id))) {
+  const { sdCardPath, cartIds, missingIds = [] } = req.body ?? {};
+  const validIds = (ids: unknown) =>
+    Array.isArray(ids) && ids.every((id: unknown) => typeof id === 'string' && /^[0-9a-f]{8}$/i.test(id));
+  if (typeof sdCardPath !== 'string' || !sdCardPath || !validIds(cartIds) || !validIds(missingIds)) {
     return res.status(400).json({ error: 'SD card path and valid cartridge IDs are required' });
   }
   try {
     const gamesDir = path.join(sdCardPath, 'Library', 'N64', 'Games');
-    const candidates = await findOrphanedUnknownFolders(sdCardPath);
+    const { candidates, missing } = await findOrphanedUnknownFolders(sdCardPath);
+    // Off the owned list only; nothing on the card changes. Rechecked like the folders.
+    const stillMissing = new Set(missing.map(({ cartId }) => cartId));
+    const listOnlyIds = [...new Set((missingIds as string[]).map((id) => id.toLowerCase()))]
+      .filter((id) => stillMissing.has(id));
     const byId = new Map(candidates.map((candidate) => [candidate.cartId, candidate.folderName]));
     const safeIds = [...new Set((cartIds as string[]).map((id) => id.toLowerCase()))]
       .filter((id) => byId.has(id));
@@ -152,7 +178,8 @@ router.post('/owned/cleanup-orphans/apply', async (req, res) => {
       deletedIds.push(id);
     }
     // Folders already deleted leave the owned list even if a later one failed
-    const removed = deletedIds.length ? await removeOwnedCartridges(deletedIds) : 0;
+    const toRemove = [...deletedIds, ...listOnlyIds];
+    const removed = toRemove.length ? await removeOwnedCartridges(toRemove) : 0;
     if (failure) {
       return res.status(500).json({ error: `Couldn't delete ${failure}`, removed, deletedFolders });
     }
