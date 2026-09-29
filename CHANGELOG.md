@@ -2,9 +2,26 @@
 
 All notable changes to A3D Manager Local. Each release's section is used as its GitHub release notes.
 
-## [Unreleased]
+## [0.3.0] - 2026-09-29
+
+Syncing labels now merges both ways, so labels on the SD card are never lost, plus fixes for SD card detection on Linux and saving on Windows.
+
+### Downloads
+
+- **Linux:** `A3D-Manager-Local-0.3.0-x86_64.AppImage`
+- **Windows installer:** `A3D-Manager-Local-0.3.0-x64-installer.exe`
+- **Windows portable:** `A3D-Manager-Local-0.3.0-x64-portable.exe`, runs without installing
+
+The Windows files aren't code-signed; SmartScreen warns on first run. Your data carries over from 0.2.x.
+
+### Added
+
+- **Sync merges labels both ways.** When both this computer and the SD card have labels, **Sync** copies labels that are only on the SD card to this computer, then writes all your labels to the card. Where a cartridge's label differs, this computer's is kept. Replacing one side entirely is still available, and now warns when it would delete labels that only the other side has.
+- **Clean up cartridges that are no longer on the card** (Settings → Cartridge List → Compare): also lists cartridges in the app's list that the SD card no longer has, for example after deleting them from the card in another copy of the app. Removing them only changes the app's list; nothing on the card changes.
 
 ### Fixed
+
+- **Syncing labels could delete labels from the SD card.** Before, choosing this computer's labels replaced the card's `labels.db` outright, so labels added from another computer or copy of the app were lost.
 
 - **Linux: SD card not detected when inserted after the app started** (on Fedora, Arch, SteamOS and others the mount folder only appears with the first card after boot). Detection now checks `/run/media` and `/media` each time, including mounts outside a user folder (older SteamOS). A chosen folder no longer turns this off: if the card isn't there, the usual locations are still searched.
 - **Windows: saves could fail with "EPERM: operation not permitted, rename"** when antivirus or Explorer briefly held a file the app had just written. Renames are retried for a few seconds, and deleting cartridge folders retries the same way.
