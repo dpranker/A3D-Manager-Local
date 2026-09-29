@@ -27,7 +27,7 @@ interface TransferProgress {
   eta: string;
 }
 
-type SyncDirection = 'upload' | 'download';
+type SyncDirection = 'upload' | 'download' | 'merge';
 type ModalStep = 'loading' | 'choose' | 'syncing' | 'complete' | 'error';
 
 interface LabelSyncModalProps {
@@ -45,8 +45,18 @@ interface LabelDiff {
 
 const MAX_NAMED = 5;
 
+const labelCount = (n: number) => `${n} label${n === 1 ? '' : 's'}`;
+
+function mergeSummary(pulled: number, pushed: number): string {
+  const parts = [
+    pulled > 0 && `Copied ${labelCount(pulled)} from the SD card to this computer.`,
+    pushed > 0 && `Wrote ${labelCount(pushed)} to the SD card.`,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : 'Both already had the same labels.';
+}
+
 /** Which carts' labels differ, so the choice of side isn't made on entry counts alone */
-function LabelDifferences({ sdCardPath }: { sdCardPath: string }) {
+function LabelDifferences({ sdCardPath, onDiff }: { sdCardPath: string; onDiff?: (diff: LabelDiff) => void }) {
   const [diff, setDiff] = useState<LabelDiff | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState(false);
@@ -61,6 +71,7 @@ function LabelDifferences({ sdCardPath }: { sdCardPath: string }) {
         const result = (await response.json()) as LabelDiff;
         if (!current) return;
         setDiff(result);
+        onDiff?.(result);
         const ids = [result.modified, result.onlyInLocal, result.onlyInOther].flatMap((list) => list.slice(0, MAX_NAMED));
         const found = await Promise.all(
           ids.map(async (id) => {
@@ -76,7 +87,7 @@ function LabelDifferences({ sdCardPath }: { sdCardPath: string }) {
     return () => {
       current = false;
     };
-  }, [sdCardPath]);
+  }, [sdCardPath, onDiff]);
 
   if (failed) return null;
   if (!diff) return <p className="sync-differences-loading">Comparing labels…</p>;
@@ -115,7 +126,13 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
     speed: '',
     eta: '',
   });
-  const [syncResult, setSyncResult] = useState<{ entryCount: number; direction: SyncDirection } | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    entryCount: number;
+    direction: SyncDirection;
+    pulled?: number;
+    pushed?: number;
+  } | null>(null);
+  const [diff, setDiff] = useState<LabelDiff | null>(null);
 
   const isSyncing = step === 'syncing';
 
@@ -159,6 +176,7 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
       setError(null);
       setProgress({ percentage: 0, bytesWritten: '', totalBytes: '', speed: '', eta: '' });
       setSyncResult(null);
+      setDiff(null);
     }
   }, [isOpen]);
 
@@ -169,9 +187,7 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
     setError(null);
     setProgress({ percentage: 0, bytesWritten: '', totalBytes: '', speed: '', eta: '' });
 
-    const endpoint = direction === 'upload'
-      ? '/api/sync/labels/upload-stream'
-      : '/api/sync/labels/download-stream';
+    const endpoint = `/api/sync/labels/${direction}-stream`;
 
     try {
       const eventSource = new EventSource(
@@ -203,7 +219,7 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
             break;
 
           case 'complete':
-            setSyncResult({ entryCount: data.entryCount, direction });
+            setSyncResult({ entryCount: data.entryCount, direction, pulled: data.pulled, pushed: data.pushed });
             setStep('complete');
             eventSource.close();
             // Update the sync status indicator
@@ -361,9 +377,19 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
               {bothExist && (
                 <div className="sync-scenario">
                   <p className="sync-description">
-                    Both your local machine and SD card have labels. Choose which version to keep:
+                    Syncing copies labels that are only on the SD card to this computer, then writes
+                    all your labels to the SD card. Where a cart's label differs, this computer's is kept.
                   </p>
-                  {selectedSDCard && <LabelDifferences sdCardPath={selectedSDCard.path} />}
+                  {selectedSDCard && <LabelDifferences sdCardPath={selectedSDCard.path} onDiff={setDiff} />}
+                  <div className="sync-actions">
+                    <button className="btn-primary" onClick={() => handleSync('merge')}>
+                      Sync
+                    </button>
+                    <button className="btn-secondary" onClick={handleClose}>
+                      Cancel
+                    </button>
+                  </div>
+                  <p className="sync-replace-heading">Or replace one side entirely:</p>
                   <div className="sync-direction-options">
                     <button
                       className="sync-direction-btn"
@@ -372,6 +398,11 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
                       <span className="sync-direction-title">Use Local Labels</span>
                       <span className="sync-direction-desc">
                         Replace SD card with your local labels ({status.local.entryCount} labels)
+                        {!!diff?.onlyInOther.length && (
+                          <strong className="sync-direction-warning">
+                            {' '}Deletes {diff.onlyInOther.length} label{diff.onlyInOther.length === 1 ? '' : 's'} only on the SD card.
+                          </strong>
+                        )}
                       </span>
                     </button>
                     <button
@@ -381,12 +412,12 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
                       <span className="sync-direction-title">Use SD Card Labels</span>
                       <span className="sync-direction-desc">
                         Replace local with SD card labels ({status.sd.entryCount} labels)
+                        {!!diff?.onlyInLocal.length && (
+                          <strong className="sync-direction-warning">
+                            {' '}Deletes {diff.onlyInLocal.length} label{diff.onlyInLocal.length === 1 ? '' : 's'} only on this computer.
+                          </strong>
+                        )}
                       </span>
-                    </button>
-                  </div>
-                  <div className="sync-actions">
-                    <button className="btn-secondary" onClick={handleClose}>
-                      Cancel
                     </button>
                   </div>
                 </div>
@@ -432,9 +463,11 @@ export function LabelSyncModal({ isOpen, onClose, onSyncComplete }: LabelSyncMod
               <div className="sync-success-icon">&#10003;</div>
               <h3>Sync Complete!</h3>
               <p>
-                {syncResult.direction === 'upload'
-                  ? `Uploaded ${syncResult.entryCount} labels to SD card.`
-                  : `Downloaded ${syncResult.entryCount} labels from SD card.`}
+                {syncResult.direction === 'merge'
+                  ? mergeSummary(syncResult.pulled ?? 0, syncResult.pushed ?? 0)
+                  : syncResult.direction === 'upload'
+                    ? `Uploaded ${syncResult.entryCount} labels to SD card.`
+                    : `Downloaded ${syncResult.entryCount} labels from SD card.`}
               </p>
               <div className="sync-actions">
                 <button className="btn-primary" onClick={handleClose}>
