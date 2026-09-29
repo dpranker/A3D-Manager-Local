@@ -6,6 +6,7 @@ import {
   detectSDCards,
   isValidAnalogueDir,
   exportLabelsToSDWithProgress,
+  mergeLabelsWithSD,
 } from '../lib/sd-card.js';
 import {
   formatBytes,
@@ -305,6 +306,41 @@ router.get('/labels/upload-stream', async (req: Request, res: Response) => {
     sendProgress({
       type: 'error',
       error: `Upload failed: ${error}`,
+    });
+  }
+
+  res.end();
+});
+
+// GET /api/sync/labels/merge-stream - Two-way sync with SSE progress: pull the SD
+// card's extra labels, then write the combined labels.db back to the card
+router.get('/labels/merge-stream', async (req: Request, res: Response) => {
+  const sdCardPath = req.query.sdCardPath as string;
+
+  if (!(await validateSDCardPath(sdCardPath, res))) return;
+
+  const sdLabelsPath = getSDLabelsPath(sdCardPath);
+  if (!(await hasLocalLabelsDb()) || !(await fileExists(sdLabelsPath))) {
+    res.status(400).json({ error: 'Merging needs a labels.db both locally and on the SD card' });
+    return;
+  }
+
+  setupSSE(res);
+  const sendProgress = createProgressSender(res);
+
+  try {
+    sendProgress({ type: 'start', direction: 'merge' });
+
+    const result = await mergeLabelsWithSD(
+      sdLabelsPath,
+      (progress) => sendProgress(formatProgressEvent(progress))
+    );
+
+    sendProgress({ type: 'complete', success: true, ...result });
+  } catch (error) {
+    sendProgress({
+      type: 'error',
+      error: `Sync failed: ${error}`,
     });
   }
 

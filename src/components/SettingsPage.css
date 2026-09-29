@@ -170,3 +170,12 @@
 .settings-page::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+.orphan-group-heading {
+  margin: 1rem 0 0.5rem;
+  font-size: 14px;
+}
+
+.orphan-group-heading:first-child {
+  margin-top: 0;
+}

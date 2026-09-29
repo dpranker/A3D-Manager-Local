@@ -114,6 +114,17 @@
   color: var(--color-text-muted);
 }
 
+.sync-direction-warning {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.sync-replace-heading {
+  margin-top: 0.5rem;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
 /* Actions */
 .sync-actions {
   display: flex;

@@ -9,7 +9,13 @@ import {
   type FileProgress,
   type BatchProgress,
 } from './file-transfer.js';
-import { parseLabelsDb, getLocalLabelsDbPath, hasLocalLabelsDb } from './labels-db-core.js';
+import {
+  parseLabelsDb,
+  getLocalLabelsDbPath,
+  hasLocalLabelsDb,
+  mergeLabelsDbFromBuffer,
+} from './labels-db-core.js';
+import { compareDetailed, compareQuick } from './labels-db-compare.js';
 
 // Re-export progress types for convenience
 export type { ProgressCallback, BatchProgressCallback, FileProgress, BatchProgress };
@@ -185,4 +191,53 @@ export async function exportLabelsToSDWithProgress(
     entryCount: db.entryCount,
     fileSize: stats.size,
   };
+}
+
+/**
+ * Merge labels result
+ */
+export interface MergeLabelsResult {
+  /** Labels copied from the SD card that this computer didn't have */
+  pulled: number;
+  /** Labels written to the SD card: ones it didn't have, plus ones that differed */
+  pushed: number;
+  entryCount: number;
+}
+
+/**
+ * Two-way labels sync: copy labels only on the SD card to the local labels.db,
+ * then write the combined labels.db back to the card. Where a cart has a label on
+ * both sides and they differ, the local one wins.
+ *
+ * @param sdLabelsPath - Full path to labels.db on the SD card
+ * @param onProgress - Progress of the write to the card (only called if there is one)
+ */
+export async function mergeLabelsWithSD(
+  sdLabelsPath: string,
+  onProgress: ProgressCallback
+): Promise<MergeLabelsResult> {
+  if (!(await hasLocalLabelsDb())) {
+    throw new Error('No local labels.db found. Import labels first.');
+  }
+  const localPath = getLocalLabelsDbPath();
+  const { readFile } = await import('fs/promises');
+
+  const diff = await compareDetailed(localPath, sdLabelsPath, { fullImageHash: true });
+  const pulled = diff.onlyInOther.length;
+  const pushed = diff.onlyInLocal.length + diff.modified.length;
+
+  // merge-skip: add the card's extra labels, keep ours where both have one.
+  // Validates the card's header and keeps the local file as labels.db.bak.
+  if (pulled > 0) {
+    await mergeLabelsDbFromBuffer(await readFile(sdLabelsPath), 'merge-skip');
+  }
+
+  // Write back whenever the files still differ (also covers a card whose entries
+  // match but are laid out differently), so the status check then reads "synced".
+  if (pushed > 0 || !(await compareQuick(localPath, sdLabelsPath)).identical) {
+    await exportLabelsToSDWithProgress(sdLabelsPath, onProgress);
+  }
+
+  const entryCount = parseLabelsDb(await readFile(localPath)).entryCount;
+  return { pulled, pushed, entryCount };
 }

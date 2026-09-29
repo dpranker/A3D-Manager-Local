@@ -23,6 +23,12 @@ interface OrphanedCartridge {
   folderName: string;
 }
 
+/** In the app's owned list, but neither a folder nor a library.db entry on the card */
+interface MissingCartridge {
+  cartId: string;
+  name: string;
+}
+
 export function SettingsPage() {
   const { invalidateImageCache, lastInvalidated } = useImageCache();
   const { selectedSDCard } = useSDCard();
@@ -40,6 +46,8 @@ export function SettingsPage() {
   const [showAddCartridgeModal, setShowAddCartridgeModal] = useState(false);
   const [orphanCandidates, setOrphanCandidates] = useState<OrphanedCartridge[] | null>(null);
   const [selectedOrphanIds, setSelectedOrphanIds] = useState<Set<string>>(new Set());
+  const [missingCarts, setMissingCarts] = useState<MissingCartridge[]>([]);
+  const [selectedMissingIds, setSelectedMissingIds] = useState<Set<string>>(new Set());
   const [orphanBusy, setOrphanBusy] = useState(false);
   const [orphanError, setOrphanError] = useState<string | null>(null);
 
@@ -94,6 +102,8 @@ export function SettingsPage() {
       const candidates = result.candidates as OrphanedCartridge[];
       setOrphanCandidates(candidates);
       setSelectedOrphanIds(new Set());
+      setMissingCarts((result.missing ?? []) as MissingCartridge[]);
+      setSelectedMissingIds(new Set());
     } catch (error) {
       setOrphanError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -102,14 +112,18 @@ export function SettingsPage() {
   };
 
   const handleRemoveOrphanedCarts = async () => {
-    if (!selectedSDCard || selectedOrphanIds.size === 0) return;
+    if (!selectedSDCard || selectedOrphanIds.size + selectedMissingIds.size === 0) return;
     setOrphanBusy(true);
     setOrphanError(null);
     try {
       const response = await fetch('/api/cartridges/owned/cleanup-orphans/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sdCardPath: selectedSDCard.path, cartIds: [...selectedOrphanIds] }),
+        body: JSON.stringify({
+          sdCardPath: selectedSDCard.path,
+          cartIds: [...selectedOrphanIds],
+          missingIds: [...selectedMissingIds],
+        }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -188,7 +202,7 @@ export function SettingsPage() {
               <div className="setting-info">
                 <h3>Clean up orphaned unknowns</h3>
                 <p className="setting-description">
-                  Compare unknown folders on the connected SD card with the console’s current <code>library.db</code>. A leftover folder may mean the console stopped tracking a game after it was removed from its library. Review the matches, then choose which orphaned folders to delete. Deletion cannot be undone.
+                  Compare unknown folders on the connected SD card with the console’s current <code>library.db</code>. A leftover folder may mean the console stopped tracking a game after it was removed from its library. Review the matches, then choose which orphaned folders to delete. Deletion cannot be undone. Also lists cartridges in this app that are no longer on the card, so you can take them off the app’s list.
                 </p>
                 {orphanError && <p className="setting-description firmware-error">{orphanError}</p>}
               </div>
@@ -508,14 +522,20 @@ export function SettingsPage() {
         footer={(
           <ModalFooter align="between">
             <Button variant="ghost" onClick={() => setOrphanCandidates(null)}>Cancel</Button>
-            <Button variant="danger" onClick={handleRemoveOrphanedCarts} disabled={selectedOrphanIds.size === 0} loading={orphanBusy}>
-              Delete selected ({selectedOrphanIds.size})
+            <Button
+              variant="danger"
+              onClick={handleRemoveOrphanedCarts}
+              disabled={selectedOrphanIds.size + selectedMissingIds.size === 0}
+              loading={orphanBusy}
+            >
+              Remove selected ({selectedOrphanIds.size + selectedMissingIds.size})
             </Button>
           </ModalFooter>
         )}
       >
         {orphanCandidates?.length ? (
           <>
+            {missingCarts.length > 0 && <h3 className="orphan-group-heading">Folders on the SD card</h3>}
             <p>
               These unknown cartridge folders are on the SD card, but their IDs are not in the console’s current <code>library.db</code>.
               This may happen after removing a game from the console library, or when settings were copied to the card for a cartridge the console hasn’t seen yet.
@@ -539,8 +559,35 @@ export function SettingsPage() {
               </label>
             ))}
           </>
-        ) : (
+        ) : missingCarts.length === 0 && (
           <p>No orphaned unknown cartridges found on this card.</p>
+        )}
+        {missingCarts.length > 0 && (
+          <>
+            <h3 className="orphan-group-heading">Only in this app</h3>
+            <p>
+              These cartridges are in this app’s list, but the SD card has no folder for them and the console’s <code>library.db</code> doesn’t list them,
+              for example after deleting them from the card in another copy of the app. Removing them only takes them off this app’s list; nothing on the SD card changes.
+              If you use more than one SD card, they may still be on another card.
+            </p>
+            {missingCarts.map(({ cartId, name }) => (
+              <label key={cartId} className="orphan-cartridge-row">
+                <input
+                  type="checkbox"
+                  checked={selectedMissingIds.has(cartId)}
+                  onChange={(event) => setSelectedMissingIds((previous) => {
+                    const next = new Set(previous);
+                    if (event.target.checked) next.add(cartId);
+                    else next.delete(cartId);
+                    return next;
+                  })}
+                />
+                <span>
+                  <span>{name} <code>{cartId}</code></span>
+                </span>
+              </label>
+            ))}
+          </>
         )}
       </Modal>
     </div>
